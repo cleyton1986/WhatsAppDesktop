@@ -5,195 +5,215 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Configuracoes - WhatsApp Desktop</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    :root {
+      --bg-primary: #111b21;
+      --bg-secondary: #202c33;
+      --bg-hover: #2a3942;
+      --text-primary: #e9edef;
+      --text-secondary: #8696a0;
+      --accent: #00a884;
+      --danger: #ea0038;
+      --border: #2a3942;
     }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg-primary: #f0f2f5;
+        --bg-secondary: #ffffff;
+        --bg-hover: #f5f6f6;
+        --text-primary: #111b21;
+        --text-secondary: #667781;
+        --accent: #008069;
+        --danger: #ea0038;
+        --border: #e9edef;
+      }
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: #111b21;
-      color: #e9edef;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
       padding: 24px;
       user-select: none;
+      overflow-y: auto;
     }
 
-    h1 {
-      font-size: 20px;
-      font-weight: 600;
-      margin-bottom: 24px;
-      color: #e9edef;
-    }
+    h1 { font-size: 20px; font-weight: 600; margin-bottom: 24px; }
 
     h2 {
-      font-size: 14px;
-      font-weight: 500;
-      color: #8696a0;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 12px;
+      font-size: 13px; font-weight: 500; color: var(--text-secondary);
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; margin-top: 24px;
     }
 
-    .account-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-bottom: 24px;
-    }
+    .section { margin-bottom: 16px; }
 
-    .account-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: #202c33;
-      border-radius: 8px;
-      padding: 12px 16px;
+    .card {
+      background: var(--bg-secondary); border-radius: 8px;
+      padding: 14px 16px; margin-bottom: 8px;
+      display: flex; align-items: center; justify-content: space-between;
       transition: background 0.15s;
     }
+    .card:hover { background: var(--bg-hover); }
 
-    .account-item:hover {
-      background: #2a3942;
-    }
+    .card-row { display: flex; align-items: center; gap: 12px; flex: 1; }
 
-    .account-name {
-      font-size: 16px;
-      color: #e9edef;
-      flex: 1;
-    }
+    .account-list { display: flex; flex-direction: column; gap: 6px; }
 
     .account-name-input {
-      font-size: 16px;
-      color: #e9edef;
-      background: #111b21;
-      border: 1px solid #00a884;
-      border-radius: 4px;
-      padding: 4px 8px;
-      outline: none;
-      flex: 1;
-      margin-right: 8px;
-    }
-
-    .account-actions {
-      display: flex;
-      gap: 8px;
+      font-size: 14px; color: var(--text-primary); background: var(--bg-primary);
+      border: 1px solid var(--accent); border-radius: 4px; padding: 4px 8px;
+      outline: none; flex: 1; margin-right: 8px;
     }
 
     .btn {
-      padding: 8px 16px;
-      border: none;
-      border-radius: 6px;
-      font-size: 14px;
-      cursor: pointer;
-      transition: background 0.15s, opacity 0.15s;
-      font-weight: 500;
+      padding: 7px 14px; border: none; border-radius: 6px; font-size: 13px;
+      cursor: pointer; transition: background 0.15s, opacity 0.15s; font-weight: 500;
     }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary { background: var(--bg-hover); color: var(--text-primary); }
+    .btn-danger { background: transparent; color: var(--danger); padding: 7px 10px; }
+    .btn-danger:hover { background: rgba(234, 0, 56, 0.1); }
+    .btn-icon { background: transparent; color: var(--text-secondary); padding: 7px; font-size: 15px; cursor: pointer; border: none; }
+    .btn-icon:hover { color: var(--text-primary); }
 
-    .btn:hover {
-      opacity: 0.85;
-    }
-
-    .btn-primary {
-      background: #00a884;
-      color: #111b21;
-    }
-
-    .btn-secondary {
-      background: #2a3942;
-      color: #e9edef;
-    }
-
-    .btn-danger {
-      background: transparent;
-      color: #ea0038;
-      padding: 8px 12px;
-    }
-
-    .btn-danger:hover {
-      background: rgba(234, 0, 56, 0.1);
-    }
-
-    .btn-icon {
-      background: transparent;
-      color: #8696a0;
-      padding: 8px;
-      font-size: 16px;
-    }
-
-    .btn-icon:hover {
-      color: #e9edef;
-    }
-
-    .add-section {
-      display: flex;
-      gap: 8px;
-      margin-top: 16px;
-    }
+    .add-section { display: flex; gap: 8px; margin-top: 12px; }
 
     .add-input {
-      flex: 1;
-      padding: 10px 14px;
-      background: #202c33;
-      border: 1px solid #2a3942;
-      border-radius: 6px;
-      color: #e9edef;
-      font-size: 14px;
-      outline: none;
-      transition: border-color 0.15s;
+      flex: 1; padding: 9px 12px; background: var(--bg-secondary);
+      border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text-primary); font-size: 13px; outline: none;
+    }
+    .add-input:focus { border-color: var(--accent); }
+    .add-input::placeholder { color: var(--text-secondary); }
+
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg-secondary); border-radius: 8px; padding: 12px 16px;
+      margin-bottom: 6px;
     }
 
-    .add-input:focus {
-      border-color: #00a884;
-    }
+    .toggle-label { font-size: 14px; }
+    .toggle-desc { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
 
-    .add-input::placeholder {
-      color: #8696a0;
+    .toggle {
+      position: relative; width: 44px; height: 24px; cursor: pointer;
     }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle .slider {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--border); border-radius: 12px; transition: 0.2s;
+    }
+    .toggle .slider::before {
+      content: ""; position: absolute; height: 18px; width: 18px;
+      left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.2s;
+    }
+    .toggle input:checked + .slider { background: var(--accent); }
+    .toggle input:checked + .slider::before { transform: translateX(20px); }
 
-    .empty-state {
-      text-align: center;
-      padding: 32px;
-      color: #8696a0;
-      font-size: 14px;
+    .schedule-row {
+      display: flex; gap: 8px; align-items: center; padding: 8px 16px;
+      background: var(--bg-secondary); border-radius: 8px; margin-bottom: 6px;
     }
+    .schedule-row input[type="time"] {
+      background: var(--bg-primary); border: 1px solid var(--border);
+      border-radius: 4px; padding: 4px 8px; color: var(--text-primary);
+      font-size: 13px; outline: none;
+    }
+    .schedule-row label { font-size: 13px; color: var(--text-secondary); }
+
+    .actions-row { display: flex; gap: 8px; margin-top: 12px; }
 
     .version {
-      position: fixed;
-      bottom: 12px;
-      right: 16px;
-      font-size: 11px;
-      color: #667781;
+      text-align: center; margin-top: 24px; padding-top: 16px;
+      border-top: 1px solid var(--border);
+      font-size: 11px; color: var(--text-secondary);
+    }
+
+    .shortcut-hint {
+      font-size: 11px; color: var(--text-secondary); margin-top: 4px;
     }
   </style>
 </head>
 <body>
   <h1>Configuracoes</h1>
 
+  <!-- CONTAS -->
   <h2>Contas WhatsApp</h2>
-  <div id="account-list" class="account-list">
-    <div class="empty-state">Carregando...</div>
+  <div class="section">
+    <div id="account-list" class="account-list"></div>
+    <div class="add-section">
+      <input type="text" id="new-account-name" class="add-input" placeholder="Nome da nova conta (ex: Trabalho)" maxlength="30" />
+      <button class="btn btn-primary" id="btn-add">Adicionar</button>
+    </div>
+    <div class="shortcut-hint">Dica: Use Ctrl+1, Ctrl+2... para alternar entre contas</div>
   </div>
 
-  <div class="add-section">
-    <input
-      type="text"
-      id="new-account-name"
-      class="add-input"
-      placeholder="Nome da nova conta (ex: Trabalho)"
-      maxlength="30"
-    />
-    <button class="btn btn-primary" id="btn-add">Adicionar</button>
+  <!-- GERAL -->
+  <h2>Geral</h2>
+  <div class="section">
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Iniciar com o sistema</div>
+        <div class="toggle-desc">Abre o WhatsApp automaticamente ao ligar o computador</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-autostart" />
+        <span class="slider"></span>
+      </label>
+    </div>
   </div>
 
-  <div class="version">WhatsApp Desktop v1.3.0</div>
+  <!-- NAO PERTURBE -->
+  <h2>Nao Perturbe</h2>
+  <div class="section">
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Silenciar notificacoes</div>
+        <div class="toggle-desc">Bloqueia todas as notificacoes de todas as contas</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-dnd" />
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="schedule-row" id="schedule-row">
+      <label>De</label>
+      <input type="time" id="dnd-start" value="22:00" />
+      <label>ate</label>
+      <input type="time" id="dnd-end" value="07:00" />
+      <button class="btn btn-secondary" id="btn-save-schedule">Salvar horario</button>
+    </div>
+  </div>
+
+  <!-- DADOS -->
+  <h2>Dados</h2>
+  <div class="section">
+    <div class="actions-row">
+      <button class="btn btn-secondary" id="btn-export">Exportar configuracoes</button>
+      <button class="btn btn-secondary" id="btn-import">Importar configuracoes</button>
+    </div>
+  </div>
+
+  <div class="version">WhatsApp Desktop v2.0.0</div>
 
   <script>
     const accountList = document.getElementById('account-list');
     const newAccountInput = document.getElementById('new-account-name');
     const btnAdd = document.getElementById('btn-add');
+    const toggleAutostart = document.getElementById('toggle-autostart');
+    const toggleDnd = document.getElementById('toggle-dnd');
+    const dndStart = document.getElementById('dnd-start');
+    const dndEnd = document.getElementById('dnd-end');
+    const btnSaveSchedule = document.getElementById('btn-save-schedule');
+    const btnExport = document.getElementById('btn-export');
+    const btnImport = document.getElementById('btn-import');
 
     let editingId = null;
 
+    // --- Contas ---
     async function loadAccounts() {
       const accounts = await window.configAPI.getAccounts();
       renderAccounts(accounts);
@@ -201,43 +221,36 @@
 
     function renderAccounts(accounts) {
       if (accounts.length === 0) {
-        accountList.innerHTML = '<div class="empty-state">Nenhuma conta configurada</div>';
+        accountList.innerHTML = '<div class="card"><span style="color:var(--text-secondary)">Nenhuma conta configurada</span></div>';
         return;
       }
-
       accountList.innerHTML = '';
-      accounts.forEach(account => {
+      accounts.forEach((account, index) => {
         const item = document.createElement('div');
-        item.className = 'account-item';
-
+        item.className = 'card';
         if (editingId === account.id) {
-          item.innerHTML = `
-            <input class="account-name-input" value="${escapeHtml(account.name)}" id="edit-input-${account.id}" />
-            <div class="account-actions">
-              <button class="btn btn-primary" onclick="saveRename('${account.id}')">Salvar</button>
-              <button class="btn btn-secondary" onclick="cancelEdit()">Cancelar</button>
-            </div>
-          `;
+          item.innerHTML = '<div class="card-row">' +
+            '<input class="account-name-input" value="' + escapeHtml(account.name) + '" id="edit-input-' + account.id + '" />' +
+            '</div>' +
+            '<div style="display:flex;gap:6px">' +
+            '<button class="btn btn-primary" onclick="saveRename(\'' + account.id + '\')">Salvar</button>' +
+            '<button class="btn btn-secondary" onclick="cancelEdit()">Cancelar</button>' +
+            '</div>';
         } else {
-          item.innerHTML = `
-            <span class="account-name">${escapeHtml(account.name)}</span>
-            <div class="account-actions">
-              <button class="btn btn-icon" onclick="startEdit('${account.id}')" title="Renomear">&#9998;</button>
-              <button class="btn btn-danger" onclick="removeAccount('${account.id}', '${escapeHtml(account.name)}')" title="Remover">Remover</button>
-            </div>
-          `;
+          item.innerHTML = '<div class="card-row">' +
+            '<span style="color:var(--text-secondary);font-size:12px">Ctrl+' + (index + 1) + '</span>' +
+            '<span>' + escapeHtml(account.name) + '</span>' +
+            '</div>' +
+            '<div style="display:flex;gap:4px">' +
+            '<button class="btn-icon" onclick="startEdit(\'' + account.id + '\')" title="Renomear">&#9998;</button>' +
+            '<button class="btn btn-danger" onclick="removeAccount(\'' + account.id + '\', \'' + escapeHtml(account.name) + '\')" title="Remover">Remover</button>' +
+            '</div>';
         }
-
         accountList.appendChild(item);
       });
-
-      // Foca no input de edicao se estiver editando
       if (editingId) {
         const input = document.getElementById('edit-input-' + editingId);
-        if (input) {
-          input.focus();
-          input.select();
-        }
+        if (input) { input.focus(); input.select(); }
       }
     }
 
@@ -250,21 +263,14 @@
     }
 
     async function removeAccount(id, name) {
-      if (confirm('Tem certeza que deseja remover a conta "' + name + '"?\nVoce precisara escanear o QR Code novamente.')) {
+      if (confirm('Remover a conta "' + name + '"?\nVoce precisara escanear o QR Code novamente.')) {
         const accounts = await window.configAPI.removeAccount(id);
         renderAccounts(accounts);
       }
     }
 
-    function startEdit(id) {
-      editingId = id;
-      loadAccounts();
-    }
-
-    function cancelEdit() {
-      editingId = null;
-      loadAccounts();
-    }
+    function startEdit(id) { editingId = id; loadAccounts(); }
+    function cancelEdit() { editingId = null; loadAccounts(); }
 
     async function saveRename(id) {
       const input = document.getElementById('edit-input-' + id);
@@ -281,14 +287,60 @@
       return div.innerHTML;
     }
 
-    // Event listeners
-    btnAdd.addEventListener('click', addAccount);
-    newAccountInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') addAccount();
+    // --- Autostart ---
+    async function loadAutostart() {
+      const enabled = await window.configAPI.getAutostart();
+      toggleAutostart.checked = enabled;
+    }
+
+    toggleAutostart.addEventListener('change', async () => {
+      await window.configAPI.setAutostart(toggleAutostart.checked);
     });
 
-    // Carrega contas ao iniciar
+    // --- Nao Perturbe ---
+    async function loadDnd() {
+      const enabled = await window.configAPI.getDnd();
+      toggleDnd.checked = enabled;
+      const schedule = await window.configAPI.getDndSchedule();
+      dndStart.value = schedule.start || '22:00';
+      dndEnd.value = schedule.end || '07:00';
+    }
+
+    toggleDnd.addEventListener('change', async () => {
+      await window.configAPI.setDnd(toggleDnd.checked);
+    });
+
+    btnSaveSchedule.addEventListener('click', async () => {
+      await window.configAPI.setDndSchedule(dndStart.value, dndEnd.value);
+      btnSaveSchedule.textContent = 'Salvo!';
+      setTimeout(() => { btnSaveSchedule.textContent = 'Salvar horario'; }, 1500);
+    });
+
+    // --- Export/Import ---
+    btnExport.addEventListener('click', async () => {
+      const ok = await window.configAPI.exportConfig();
+      if (ok) { btnExport.textContent = 'Exportado!'; setTimeout(() => { btnExport.textContent = 'Exportar configuracoes'; }, 1500); }
+    });
+
+    btnImport.addEventListener('click', async () => {
+      const ok = await window.configAPI.importConfig();
+      if (ok) {
+        btnImport.textContent = 'Importado!';
+        setTimeout(() => { btnImport.textContent = 'Importar configuracoes'; }, 1500);
+        await loadAccounts();
+        await loadDnd();
+        await loadAutostart();
+      }
+    });
+
+    // --- Event listeners ---
+    btnAdd.addEventListener('click', addAccount);
+    newAccountInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addAccount(); });
+
+    // --- Init ---
     loadAccounts();
+    loadAutostart();
+    loadDnd();
   </script>
 </body>
 </html>
