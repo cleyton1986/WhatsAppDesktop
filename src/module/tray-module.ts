@@ -1,125 +1,107 @@
-import { BrowserWindow, Menu, MenuItem, Tray } from "electron";
-import { findIcon, getUnreadMessages } from "../util";
-import WhatsApp from "../whatsapp";
-import Module from "./module";
+import { Menu, MenuItem, Tray } from "electron";
+import { findIcon } from "../util";
+import type AppController from "../app-controller";
 
-// Atualize os nomes dos ícones para os novos nomes definidos
 const ICON = findIcon("whatsapp-desktop-cleyton.png");
 const ICON_UNREAD = findIcon("whatsapp-desktop-cleyton-unread.png");
 
 /**
- * Módulo responsável por criar e gerenciar o ícone de tray.
+ * Modulo responsavel pelo icone na bandeja do sistema.
+ * Gerencia um unico tray icon para todas as contas.
  */
-export default class TrayModule extends Module {
+export default class TrayModule {
   private readonly tray: Tray;
 
-  constructor(
-    private readonly whatsApp: WhatsApp,
-    private readonly window: BrowserWindow
-  ) {
-    super();
-    console.log("[TrayModule] Criando instância de Tray com ícone:", ICON);
+  constructor(private readonly controller: AppController) {
     this.tray = new Tray(ICON);
   }
 
-  public override onLoad() {
-    console.log("[TrayModule] onLoad chamado. Atualizando menu do tray...");
-    this.updateMenu();
-    this.registerListeners();
+  public onLoad() {
+    this.updateFromAccounts();
+    this.registerTrayClick();
   }
 
   /**
-   * Atualiza o menu do tray com as opções e o tooltip com base no número de mensagens não lidas.
-   * @param unread Número de chats não lidos (padrão 0).
+   * Atualiza o menu e icone do tray com base em todas as contas.
    */
-  private updateMenu(unread: number = getUnreadMessages(this.window.title)) {
-    console.log("[TrayModule] Atualizando menu do tray. unread =", unread);
-    const menu = Menu.buildFromTemplate([
-      {
-        label: this.window.isVisible() ? "Minimize to tray" : "Show WhatsApp",
-        click: () => this.onClickFirstItem(),
-      },
-      {
-        label: "Quit WhatsApp",
-        click: () => {
-          console.log("[TrayModule] Quit selecionado.");
-          this.whatsApp.quit();
-        },
-      },
-    ]);
+  public updateFromAccounts() {
+    const accountWindows = this.controller.getAccountWindows();
+    const totalUnread = this.controller.getTotalUnread();
 
-    let tooltip = "WhatsApp Desktop";
+    const menuItems: Electron.MenuItemConstructorOptions[] = [];
 
-    if (unread != 0) {
-      menu.insert(
-        0,
-        new MenuItem({
-          label: `${unread} unread chats`,
-          enabled: false,
-        })
-      );
-
-      menu.insert(1, new MenuItem({ type: "separator" }));
-
-      tooltip = `${tooltip} - ${unread} unread chats`;
+    // Se ha mensagens nao lidas, mostra contador no topo
+    if (totalUnread > 0) {
+      menuItems.push({
+        label: `${totalUnread} mensagens nao lidas`,
+        enabled: false,
+      });
+      menuItems.push({ type: "separator" });
     }
 
+    // Lista cada conta com seu status
+    for (const aw of accountWindows) {
+      const unreadLabel =
+        aw.unreadCount > 0 ? ` (${aw.unreadCount})` : "";
+      menuItems.push({
+        label: `${aw.account.name}${unreadLabel}`,
+        click: () => aw.show(),
+      });
+    }
+
+    menuItems.push({ type: "separator" });
+
+    menuItems.push({
+      label: "Configuracoes",
+      click: () => this.openConfig(),
+    });
+
+    menuItems.push({ type: "separator" });
+
+    menuItems.push({
+      label: "Fechar",
+      click: () => this.controller.quit(),
+    });
+
+    const menu = Menu.buildFromTemplate(menuItems);
     this.tray.setContextMenu(menu);
-    this.tray.setToolTip(tooltip);
-    console.log("[TrayModule] Menu e tooltip atualizados.");
-  }
 
-  /**
-   * Alterna entre mostrar e esconder a janela da aplicação.
-   */
-  private onClickFirstItem() {
-    if (this.window.isVisible()) {
-      console.log("[TrayModule] Janela visível, ocultando...");
-      this.window.hide();
-    } else {
-      console.log("[TrayModule] Janela oculta, exibindo...");
-      this.window.show();
-      this.window.focus();
+    // Tooltip
+    let tooltip = "WhatsApp Desktop";
+    if (totalUnread > 0) {
+      tooltip += ` - ${totalUnread} mensagens nao lidas`;
     }
-    this.updateMenu();
+    this.tray.setToolTip(tooltip);
+
+    // Icone: muda se qualquer conta tem mensagens nao lidas
+    this.tray.setImage(totalUnread > 0 ? ICON_UNREAD : ICON);
   }
 
   /**
-   * Registra os listeners para eventos da janela e do tray.
+   * Clique no icone do tray alterna visibilidade da primeira janela.
    */
-  private registerListeners() {
-    // Atualiza o menu sempre que a janela for mostrada ou escondida.
-    this.window.on("show", () => {
-      console.log("[TrayModule] Evento 'show' disparado.");
-      this.updateMenu();
-    });
-    this.window.on("hide", () => {
-      console.log("[TrayModule] Evento 'hide' disparado.");
-      this.updateMenu();
-    });
+  private registerTrayClick() {
+    this.tray.on("click", () => {
+      const windows = this.controller.getAccountWindows();
+      if (windows.length === 0) return;
 
-    // Intercepta o fechamento da janela para minimizá-la no tray.
-    this.window.on("close", (event) => {
-      console.log("[TrayModule] Evento 'close' disparado.");
-      if (this.whatsApp.quitting) {
-        console.log("[TrayModule] Aplicativo está sendo finalizado.");
-        return;
+      // Se alguma janela esta visivel, esconde todas
+      const anyVisible = windows.some((aw) => aw.window.isVisible());
+      if (anyVisible) {
+        windows.forEach((aw) => aw.hide());
+      } else {
+        // Mostra todas as janelas
+        windows.forEach((aw) => aw.show());
       }
-      event.preventDefault();
-      console.log("[TrayModule] Prevenindo fechamento e ocultando janela.");
-      this.window.hide();
     });
+  }
 
-    // Atualiza o menu do tray quando o título da página for atualizado.
-    this.window.webContents.on(
-      "page-title-updated",
-      (_event, title, explicitSet) => {
-        if (!explicitSet) return;
-        console.log("[TrayModule] Título atualizado para:", title);
-        let unread = getUnreadMessages(title);
-        this.updateMenu(unread);
-        this.tray.setImage(unread == 0 ? ICON : ICON_UNREAD);
-      }
-    );
+  /**
+   * Abre a janela de configuracoes.
+   */
+  private openConfig() {
+    // Importa dinamicamente para evitar dependencia circular
+    const { openConfigWindow } = require("../config-window");
+    openConfigWindow();
   }
 }
