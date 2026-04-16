@@ -1,7 +1,9 @@
-import { app, ipcMain } from "electron";
+import { app, globalShortcut, ipcMain } from "electron";
 import AccountManager, { Account } from "./account";
 import AccountWindow from "./account-window";
+import Settings from "./settings";
 import TrayModule from "./module/tray-module";
+import { initMiniPlayer } from "./mini-player";
 
 /**
  * Controlador principal da aplicacao.
@@ -9,6 +11,7 @@ import TrayModule from "./module/tray-module";
  */
 export default class AppController {
   public readonly accountManager: AccountManager;
+  public readonly settings = new Settings("app");
   private readonly accountWindows = new Map<string, AccountWindow>();
   private trayModule!: TrayModule;
   public quitting = false;
@@ -34,6 +37,8 @@ export default class AppController {
 
     this.registerListeners();
     this.registerIpcHandlers();
+    this.registerGlobalShortcuts();
+    initMiniPlayer();
   }
 
   /**
@@ -44,7 +49,10 @@ export default class AppController {
 
     accountWindow.onUnreadChange = () => {
       this.trayModule.updateFromAccounts();
+      this.updateBadgeCount();
     };
+
+    accountWindow.isDndActive = () => this.isDndActive();
 
     accountWindow.init();
     this.accountWindows.set(account.id, accountWindow);
@@ -88,6 +96,61 @@ export default class AppController {
       total += aw.unreadCount;
     }
     return total;
+  }
+
+  /**
+   * Verifica se o modo nao perturbe esta ativo (manual ou por horario).
+   */
+  public isDndActive(): boolean {
+    const enabled = this.settings.get("dnd.enabled", false);
+    if (enabled) return true;
+
+    const useSchedule = this.settings.get("dnd.useSchedule", false);
+    if (!useSchedule) return false;
+
+    const start = this.settings.get("dnd.start", "22:00");
+    const end = this.settings.get("dnd.end", "07:00");
+
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const [startH, startM] = start.split(":").map(Number);
+    const [endH, endM] = end.split(":").map(Number);
+    const startMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
+
+    if (startMinutes <= endMinutes) {
+      return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+    } else {
+      // Horario cruza meia-noite (ex: 22:00 - 07:00)
+      return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+    }
+  }
+
+  /**
+   * Registra atalhos globais Ctrl+1..9 para alternar entre contas.
+   */
+  private registerGlobalShortcuts() {
+    for (let i = 1; i <= 9; i++) {
+      globalShortcut.register(`CommandOrControl+${i}`, () => {
+        const windows = this.getAccountWindows();
+        const index = i - 1;
+        if (index < windows.length) {
+          windows[index].show();
+        }
+      });
+    }
+
+    app.on("will-quit", () => {
+      globalShortcut.unregisterAll();
+    });
+  }
+
+  /**
+   * Atualiza o badge counter no dock/taskbar com total de mensagens nao lidas.
+   */
+  private updateBadgeCount() {
+    const total = this.getTotalUnread();
+    app.setBadgeCount(total);
   }
 
   /**
@@ -165,6 +228,123 @@ export default class AppController {
       }
       this.trayModule.updateFromAccounts();
       return this.accountManager.getAccounts();
+    });
+
+    // Auto-inicio com o sistema
+    ipcMain.handle("get-autostart", () => {
+      return app.getLoginItemSettings().openAtLogin;
+    });
+
+    ipcMain.handle("set-autostart", (_event, enabled: boolean) => {
+      app.setLoginItemSettings({
+        openAtLogin: enabled,
+        args: ["--start-hidden"],
+      });
+      return app.getLoginItemSettings().openAtLogin;
+    });
+
+    // Modo nao perturbe
+    ipcMain.handle("get-dnd", () => {
+      return this.settings.get("dnd.enabled", false);
+    });
+
+    ipcMain.handle("set-dnd", (_event, enabled: boolean) => {
+      this.settings.set("dnd.enabled", enabled);
+      return enabled;
+    });
+
+    ipcMain.handle("get-dnd-schedule", () => {
+      return {
+        start: this.settings.get("dnd.start", "22:00"),
+        end: this.settings.get("dnd.end", "07:00"),
+        useSchedule: this.settings.get("dnd.useSchedule", false),
+      };
+    });
+
+    ipcMain.handle(
+      "set-dnd-schedule",
+      (_event, start: string, end: string) => {
+        this.settings.set("dnd.start", start);
+        this.settings.set("dnd.end", end);
+        this.settings.set("dnd.useSchedule", true);
+        return { start, end, useSchedule: true };
+      }
+    );
+
+    // Exportar/importar configuracoes
+    ipcMain.handle("export-config", async () => {
+      const { dialog } = require("electron");
+      const result = await dialog.showSaveDialog({
+        title: "Exportar configuracoes",
+        defaultPath: "whatsapp-desktop-config.json",
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (!result.canceled && result.filePath) {
+        const fs = require("fs");
+        const config = {
+          accounts: this.accountManager.getAccounts(),
+          dnd: {
+            enabled: this.settings.get("dnd.enabled", false),
+            start: this.settings.get("dnd.start", "22:00"),
+            end: this.settings.get("dnd.end", "07:00"),
+            useSchedule: this.settings.get("dnd.useSchedule", false),
+          },
+          autostart: app.getLoginItemSettings().openAtLogin,
+        };
+        fs.writeFileSync(result.filePath, JSON.stringify(config, null, 2));
+        return true;
+      }
+      return false;
+    });
+
+    ipcMain.handle("import-config", async () => {
+      const { dialog } = require("electron");
+      const result = await dialog.showOpenDialog({
+        title: "Importar configuracoes",
+        filters: [{ name: "JSON", extensions: ["json"] }],
+        properties: ["openFile"],
+      });
+      if (!result.canceled && result.filePaths.length > 0) {
+        const fs = require("fs");
+        try {
+          const data = JSON.parse(
+            fs.readFileSync(result.filePaths[0], "utf-8")
+          );
+          // Importar contas (apenas as que nao existem)
+          if (data.accounts && Array.isArray(data.accounts)) {
+            const existing = this.accountManager.getAccounts();
+            for (const acc of data.accounts) {
+              if (!existing.find((e: any) => e.name === acc.name)) {
+                const newAcc = this.accountManager.addAccount(acc.name);
+                this.createAccountWindow(newAcc);
+              }
+            }
+          }
+          // Importar DnD
+          if (data.dnd) {
+            this.settings.set("dnd.enabled", data.dnd.enabled || false);
+            this.settings.set("dnd.start", data.dnd.start || "22:00");
+            this.settings.set("dnd.end", data.dnd.end || "07:00");
+            this.settings.set(
+              "dnd.useSchedule",
+              data.dnd.useSchedule || false
+            );
+          }
+          // Importar autostart
+          if (data.autostart !== undefined) {
+            app.setLoginItemSettings({
+              openAtLogin: data.autostart,
+              args: ["--start-hidden"],
+            });
+          }
+          this.trayModule.updateFromAccounts();
+          return true;
+        } catch (e) {
+          console.error("Erro ao importar configuracoes:", e);
+          return false;
+        }
+      }
+      return false;
     });
   }
 }
