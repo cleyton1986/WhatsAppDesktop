@@ -10,8 +10,14 @@ import path from "path";
 export function findIcon(name: string) {
   let iconPath = fromDataDirs("icons/hicolor/512x512/apps/" + name);
 
-  if (iconPath === null)
-    iconPath = path.join("./data/icons/hicolor/512x512/apps/", name);
+  if (iconPath === null) {
+    // Em producao (AppImage): extraFiles ficam na raiz do app (ao lado de resources/)
+    if (app.isPackaged) {
+      iconPath = path.join(process.resourcesPath, "..", "data/icons/hicolor/512x512/apps/", name);
+    } else {
+      iconPath = path.join(__dirname, "..", "data/icons/hicolor/512x512/apps/", name);
+    }
+  }
 
   return nativeImage.createFromPath(iconPath);
 }
