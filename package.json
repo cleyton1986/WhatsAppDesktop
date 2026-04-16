@@ -1,14 +1,14 @@
 {
   "name": "whatsapp-desktop-cleyton",
-  "version": "1.2.3-2",
+  "version": "2.0.0",
   "description": "WhatsApp Desktop for Linux (unofficial)",
   "main": "dist/index.js",
   "scripts": {
     "dist": "tsc",
     "watch": "tsc -w",
     "lint": "eslint -c .eslintrc --ext .ts ./src",
-    "start": "npm run dist && electron .",
-    "build": "npm run dist && electron-builder"
+    "start": "yarn dist && electron .",
+    "build": "yarn dist && electron-builder"
   },
   "author": "Cleyton Alves",
   "license": "MIT",
@@ -16,9 +16,9 @@
     "electron-store": "^8.1.0"
   },
   "devDependencies": {
-    "electron": "^21.0.1",
-    "electron-builder": "^23.3.3",
-    "typescript": "^4.8.4"
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.5.0"
   },
   "build": {
     "appId": "github.cleyton1986.WhatsAppDesktop",
