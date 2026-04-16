@@ -1,6 +1,9 @@
 import { app } from "electron";
-import WhatsApp from "./whatsapp";
+import AppController from "./app-controller";
 import { setupDesktopEntry } from "./setup-desktop-entry";
+
+// Registra o protocolo whatsapp:// como handler nativo do Electron
+app.setAsDefaultProtocolClient("whatsapp");
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -9,11 +12,10 @@ if (!app.requestSingleInstanceLock()) {
 
 app.whenReady().then(() => {
   setupDesktopEntry();
-  new WhatsApp().init();
+  new AppController().init();
 });
 
+// Nao encerrar o app quando todas as janelas fecharem - o app vive no tray
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  // Nao faz nada - o app continua rodando na bandeja do sistema
 });

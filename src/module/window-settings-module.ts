@@ -3,33 +3,36 @@ import Settings from "../settings";
 import WhatsApp from "../whatsapp";
 import Module from "./module";
 
-const settings = new Settings("window");
-
 /**
- * Módulo para salvar e restaurar as configurações de tamanho e posição da janela.
+ * Modulo para salvar e restaurar as configuracoes de tamanho e posicao da janela.
+ * Aceita um Settings injetado para suporte multi-conta (cada conta tem seu proprio scope).
  */
 export default class WindowSettingsModule extends Module {
+  private readonly settings: Settings;
+
   constructor(
-    private readonly whatsApp: WhatsApp,
-    private readonly window: BrowserWindow
+    private readonly whatsApp: WhatsApp | { quitting: boolean; quit: () => void },
+    private readonly window: BrowserWindow,
+    settings?: Settings
   ) {
     super();
+    this.settings = settings || new Settings("window");
   }
 
   public override beforeLoad() {
-    let defaults = this.window.getBounds(); // Obtém os valores padrão de tamanho e posição.
-    this.window.setBounds(settings.get("bounds", defaults));
+    const defaults = this.window.getBounds();
+    this.window.setBounds(this.settings.get("bounds", defaults));
 
-    if (settings.get("maximized", false)) {
+    if (this.settings.get("maximized", false)) {
       this.window.maximize();
     }
   }
 
   public override onQuit() {
-    settings.set("maximized", this.window.isMaximized());
+    this.settings.set("maximized", this.window.isMaximized());
 
     if (!this.window.isMaximized()) {
-      settings.set("bounds", this.window.getBounds());
+      this.settings.set("bounds", this.window.getBounds());
     }
   }
 }

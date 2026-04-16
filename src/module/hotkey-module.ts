@@ -1,6 +1,10 @@
 import { BrowserWindow, Event, Input } from "electron";
-import WhatsApp from "../whatsapp";
 import Module from "./module";
+
+interface Quittable {
+  quit(): void;
+  reload(): void;
+}
 
 interface ClickAction {
   control?: boolean;
@@ -9,13 +13,13 @@ interface ClickAction {
 }
 
 /**
- * Módulo que registra e gerencia atalhos de teclado.
+ * Modulo que registra e gerencia atalhos de teclado.
  */
 export default class HotkeyModule extends Module {
   private readonly actions = new Array<ClickAction>();
 
   constructor(
-    private readonly whatsApp: WhatsApp,
+    private readonly app: Quittable,
     private readonly window: BrowserWindow
   ) {
     super();
@@ -26,19 +30,10 @@ export default class HotkeyModule extends Module {
     this.registerListeners();
   }
 
-  /**
-   * Adiciona ações de teclado.
-   * @param clickActions Conjunto de ações a serem registradas.
-   */
   public add(...clickActions: Array<ClickAction>) {
     clickActions.forEach((action) => this.actions.push(action));
   }
 
-  /**
-   * Processa o evento de entrada e executa as ações registradas.
-   * @param event Evento de entrada.
-   * @param input Dados do input.
-   */
   private onInput(event: Event, input: Input) {
     this.actions.forEach((clickAction) => {
       if (
@@ -51,9 +46,6 @@ export default class HotkeyModule extends Module {
     });
   }
 
-  /**
-   * Registra os atalhos de teclado.
-   */
   private registerHotkeys() {
     this.add(
       {
@@ -79,12 +71,12 @@ export default class HotkeyModule extends Module {
       },
       {
         keys: ["F5"],
-        action: () => this.whatsApp.reload(),
+        action: () => this.app.reload(),
       },
       {
         control: true,
         keys: ["R"],
-        action: () => this.whatsApp.reload(),
+        action: () => this.app.reload(),
       },
       {
         control: true,
@@ -94,14 +86,11 @@ export default class HotkeyModule extends Module {
       {
         control: true,
         keys: ["Q"],
-        action: () => this.whatsApp.quit(),
+        action: () => this.app.quit(),
       }
     );
   }
 
-  /**
-   * Registra os listeners para eventos de entrada.
-   */
   private registerListeners() {
     this.window.webContents.on("before-input-event", (event, input) =>
       this.onInput(event, input)
