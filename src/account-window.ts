@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, session, Notification as ElectronNotification } from "electron";
+import { BrowserWindow, session } from "electron";
 import path from "path";
 import { Account } from "./account";
 import { transformDeepLink } from "./util";
@@ -68,8 +68,22 @@ export default class AccountWindow {
     this.window.loadURL("https://web.whatsapp.com/", { userAgent: USER_AGENT });
 
     this.window.webContents.on("dom-ready", () => {
+      console.log(`[${this.account.name}] dom-ready - injetando override de Notification`);
       this.injectNotificationOverride();
-      this.injectAudioMonitor();
+    });
+
+    // Log TODAS as console-message para debug
+    this.window.webContents.on("console-message", (_event, level, message) => {
+      if (message.startsWith("__WA_NOTIF__")) {
+        console.log(`[${this.account.name}] NOTIFICACAO CAPTURADA:`, message);
+        try {
+          const data = JSON.parse(message.substring("__WA_NOTIF__".length));
+          const { pushNotification } = require("./notification-window");
+          pushNotification(this.account.id, data.title, data.body, this.account.emoji || "");
+        } catch (e) {
+          console.error(`[${this.account.name}] Erro ao processar notificacao:`, e);
+        }
+      }
     });
 
     // Controla permissao de notificacao baseado no DnD
@@ -158,106 +172,32 @@ export default class AccountWindow {
   }
 
   private injectNotificationOverride() {
+    const accountEmoji = this.account.emoji || "";
     const accountName = this.account.name;
+    const accountLabel = accountEmoji ? `${accountEmoji} ${accountName}` : accountName;
+
+    // Substitui Notification completamente - usa console.log com prefixo especial
+    // para comunicar com o main process (unica forma confiavel com contextIsolation + sandbox)
     this.window.webContents.executeJavaScript(`
       (function() {
-        const OriginalNotification = window.Notification;
-        const accountName = ${JSON.stringify(accountName)};
-        window.Notification = class extends OriginalNotification {
-          constructor(title, options) {
-            const modifiedOptions = Object.assign({}, options);
-            if (modifiedOptions.body) {
-              modifiedOptions.body = '[' + accountName + '] ' + modifiedOptions.body;
-            } else {
-              modifiedOptions.body = '[' + accountName + ']';
-            }
-            super(title, modifiedOptions);
-            // Envia dados da notificacao para o main process (resposta rapida)
-            if (window.electronAPI && window.electronAPI.sendNotificationData) {
-              window.electronAPI.sendNotificationData({ title: title, body: modifiedOptions.body });
-            }
-            this.addEventListener('click', () => {
-              if (window.electronAPI && window.electronAPI.sendNotificationClick) {
-                window.electronAPI.sendNotificationClick();
-              }
-            });
-          }
+        var label = ${JSON.stringify(accountLabel)};
+        console.log('__WA_INJECT_OK__ label=' + label);
+        function FakeNotification(title, options) {
+          var opts = options || {};
+          var body = opts.body ? '[' + label + '] ' + opts.body : '[' + label + ']';
+          console.log('__WA_NOTIF__' + JSON.stringify({ title: title, body: body }));
+        }
+        FakeNotification.permission = 'granted';
+        FakeNotification.requestPermission = function(cb) {
+          if (cb) cb('granted');
+          return Promise.resolve('granted');
         };
-        window.Notification.permission = OriginalNotification.permission;
-        window.Notification.requestPermission = OriginalNotification.requestPermission.bind(OriginalNotification);
+        window.Notification = FakeNotification;
       })();
-    `);
-
-    // Escuta dados de notificacao e cria notificacao nativa do Electron com acao de resposta
-    const handler = (_event: any, data: { title: string; body: string }) => {
-      if (!ElectronNotification.isSupported()) return;
-
-      const notification = new ElectronNotification({
-        title: data.title,
-        body: data.body,
-        hasReply: true,
-        replyPlaceholder: "Responder...",
-      });
-
-      notification.on("click", () => {
-        this.show();
-      });
-
-      notification.on("reply", (_event, reply) => {
-        // Envia a resposta para o renderer para ser digitada no campo de mensagem
-        this.window.webContents.executeJavaScript(`
-          (function() {
-            // Foca no campo de mensagem e insere o texto
-            const input = document.querySelector('[contenteditable="true"][data-tab="10"]') ||
-                          document.querySelector('[contenteditable="true"][role="textbox"]') ||
-                          document.querySelector('footer [contenteditable="true"]');
-            if (input) {
-              input.focus();
-              document.execCommand('insertText', false, ${JSON.stringify(reply)});
-              // Simula Enter para enviar
-              setTimeout(() => {
-                const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true });
-                input.dispatchEvent(enterEvent);
-              }, 100);
-            }
-          })();
-        `);
-      });
-
-      notification.show();
-    };
-
-    // Remove handler anterior se existir e registra novo
-    ipcMain.removeAllListeners("notification-data");
-    ipcMain.on("notification-data", handler);
-  }
-
-  /**
-   * Injeta monitor de audio que detecta quando um audio esta tocando
-   * e envia o estado para o main process para o mini-player flutuante.
-   */
-  private injectAudioMonitor() {
-    this.window.webContents.executeJavaScript(`
-      (function() {
-        let lastState = null;
-        setInterval(() => {
-          const audios = document.querySelectorAll('audio');
-          let playing = null;
-          audios.forEach(audio => {
-            if (!audio.paused && audio.duration > 0) {
-              playing = { playing: true, currentTime: audio.currentTime, duration: audio.duration };
-            }
-          });
-          const state = playing || { playing: false, currentTime: 0, duration: 0 };
-          const stateKey = state.playing + '-' + Math.floor(state.currentTime);
-          if (stateKey !== lastState) {
-            lastState = stateKey;
-            if (window.electronAPI && window.electronAPI.sendAudioState) {
-              window.electronAPI.sendAudioState(state);
-            }
-          }
-        }, 1000);
-      })();
-    `);
+    `).then(() => {
+      console.log('[' + this.account.name + '] Inject executado com sucesso');
+    }).catch((e: any) => {
+      console.error('[' + this.account.name + '] Erro no inject:', e);
+    });
   }
 }

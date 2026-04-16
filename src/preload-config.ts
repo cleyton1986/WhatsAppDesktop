@@ -7,10 +7,15 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("configAPI", {
   // Contas
   getAccounts: () => ipcRenderer.invoke("get-accounts"),
-  addAccount: (name: string) => ipcRenderer.invoke("add-account", name),
+  addAccount: (name: string, emoji?: string) =>
+    ipcRenderer.invoke("add-account", name, emoji),
   removeAccount: (id: string) => ipcRenderer.invoke("remove-account", id),
   renameAccount: (id: string, name: string) =>
     ipcRenderer.invoke("rename-account", id, name),
+  setEmoji: (id: string, emoji: string) =>
+    ipcRenderer.invoke("set-emoji", id, emoji),
+  setTheme: (id: string, theme: string) =>
+    ipcRenderer.invoke("set-theme", id, theme),
 
   // Auto-inicio
   getAutostart: () => ipcRenderer.invoke("get-autostart"),

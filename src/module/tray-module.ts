@@ -33,20 +33,25 @@ export default class TrayModule {
     // Se ha mensagens nao lidas, mostra contador no topo
     if (totalUnread > 0) {
       menuItems.push({
-        label: `${totalUnread} mensagens nao lidas`,
+        label: `[ ${totalUnread} mensagens nao lidas ]`,
         enabled: false,
       });
       menuItems.push({ type: "separator" });
     }
 
-    // Lista cada conta com indicador de status
+    // Lista cada conta com indicador de status textual
     for (const aw of accountWindows) {
       const isVisible = aw.window.isVisible();
-      const statusIcon = aw.unreadCount > 0 ? "\uD83D\uDD34" : isVisible ? "\uD83D\uDFE2" : "\u26AA";
-      const unreadLabel =
-        aw.unreadCount > 0 ? ` (${aw.unreadCount})` : "";
+      let status = "";
+      if (aw.unreadCount > 0) {
+        status = ` * ${aw.unreadCount} novas`;
+      } else if (isVisible) {
+        status = " (aberto)";
+      }
+
+      const emoji = aw.account.emoji ? `${aw.account.emoji} ` : "";
       menuItems.push({
-        label: `${statusIcon} ${aw.account.name}${unreadLabel}`,
+        label: `${emoji}${aw.account.name}${status}`,
         click: () => aw.show(),
       });
     }
@@ -79,30 +84,21 @@ export default class TrayModule {
     this.tray.setImage(totalUnread > 0 ? ICON_UNREAD : ICON);
   }
 
-  /**
-   * Clique no icone do tray alterna visibilidade da primeira janela.
-   */
   private registerTrayClick() {
     this.tray.on("click", () => {
       const windows = this.controller.getAccountWindows();
       if (windows.length === 0) return;
 
-      // Se alguma janela esta visivel, esconde todas
       const anyVisible = windows.some((aw) => aw.window.isVisible());
       if (anyVisible) {
         windows.forEach((aw) => aw.hide());
       } else {
-        // Mostra todas as janelas
         windows.forEach((aw) => aw.show());
       }
     });
   }
 
-  /**
-   * Abre a janela de configuracoes.
-   */
   private openConfig() {
-    // Importa dinamicamente para evitar dependencia circular
     const { openConfigWindow } = require("../config-window");
     openConfigWindow();
   }

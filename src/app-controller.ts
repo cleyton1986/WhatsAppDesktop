@@ -4,6 +4,7 @@ import AccountWindow from "./account-window";
 import Settings from "./settings";
 import TrayModule from "./module/tray-module";
 import { initMiniPlayer } from "./mini-player";
+import { initNotificationWindow } from "./notification-window";
 
 /**
  * Controlador principal da aplicacao.
@@ -38,7 +39,8 @@ export default class AppController {
     this.registerListeners();
     this.registerIpcHandlers();
     this.registerGlobalShortcuts();
-    initMiniPlayer();
+    initMiniPlayer(() => this.getAccountWindows());
+    initNotificationWindow(() => this.getAccountWindows());
   }
 
   /**
@@ -56,6 +58,15 @@ export default class AppController {
 
     accountWindow.init();
     this.accountWindows.set(account.id, accountWindow);
+
+    // Aplica tema da conta apos carregar
+    accountWindow.window.webContents.on("dom-ready", () => {
+      const theme = account.theme || "system";
+      if (theme !== "system") {
+        this.applyTheme(accountWindow, theme);
+      }
+    });
+
     return accountWindow;
   }
 
@@ -96,6 +107,28 @@ export default class AppController {
       total += aw.unreadCount;
     }
     return total;
+  }
+
+  /**
+   * Aplica tema (dark/light/system) na janela do WhatsApp Web.
+   * Usa o mecanismo nativo do WhatsApp Web para trocar tema.
+   */
+  private applyTheme(aw: AccountWindow, theme: string) {
+    // O WhatsApp Web respeita a classe 'dark' no body e o atributo data-theme
+    if (theme === "dark") {
+      aw.window.webContents.executeJavaScript(`
+        document.body.classList.add('dark');
+        document.body.setAttribute('data-theme', 'dark');
+        localStorage.setItem('theme', '"dark"');
+      `).catch(() => {});
+    } else if (theme === "light") {
+      aw.window.webContents.executeJavaScript(`
+        document.body.classList.remove('dark');
+        document.body.setAttribute('data-theme', 'light');
+        localStorage.setItem('theme', '"light"');
+      `).catch(() => {});
+    }
+    // system = nao faz nada, respeita o padrao do WhatsApp Web
   }
 
   /**
@@ -203,8 +236,8 @@ export default class AppController {
       return this.accountManager.getAccounts();
     });
 
-    ipcMain.handle("add-account", (_event, name: string) => {
-      const account = this.accountManager.addAccount(name);
+    ipcMain.handle("add-account", (_event, name: string, emoji?: string) => {
+      const account = this.accountManager.addAccount(name, emoji || "");
       this.createAccountWindow(account);
       this.trayModule.updateFromAccounts();
       return account;
@@ -230,17 +263,56 @@ export default class AppController {
       return this.accountManager.getAccounts();
     });
 
-    // Auto-inicio com o sistema
+    // Emoji e tema por conta
+    ipcMain.handle("set-emoji", (_event, id: string, emoji: string) => {
+      this.accountManager.setEmoji(id, emoji);
+      this.trayModule.updateFromAccounts();
+      return this.accountManager.getAccounts();
+    });
+
+    ipcMain.handle("set-theme", (_event, id: string, theme: string) => {
+      this.accountManager.setTheme(id, theme as "system" | "dark" | "light");
+      const aw = this.accountWindows.get(id);
+      if (aw) this.applyTheme(aw, theme);
+      return this.accountManager.getAccounts();
+    });
+
+    // Auto-inicio com o sistema (gerencia arquivo ~/.config/autostart/ manualmente no Linux)
     ipcMain.handle("get-autostart", () => {
-      return app.getLoginItemSettings().openAtLogin;
+      const fs = require("fs");
+      const path = require("path");
+      const os = require("os");
+      const autostartFile = path.join(os.homedir(), ".config", "autostart", "whatsapp-desktop-cleyton.desktop");
+      return fs.existsSync(autostartFile);
     });
 
     ipcMain.handle("set-autostart", (_event, enabled: boolean) => {
-      app.setLoginItemSettings({
-        openAtLogin: enabled,
-        args: ["--start-hidden"],
-      });
-      return app.getLoginItemSettings().openAtLogin;
+      const fs = require("fs");
+      const path = require("path");
+      const os = require("os");
+      const autostartDir = path.join(os.homedir(), ".config", "autostart");
+      const autostartFile = path.join(autostartDir, "whatsapp-desktop-cleyton.desktop");
+      const execPath = process.env.APPIMAGE || process.execPath;
+
+      if (enabled) {
+        if (!fs.existsSync(autostartDir)) {
+          fs.mkdirSync(autostartDir, { recursive: true });
+        }
+        const content = `[Desktop Entry]
+Type=Application
+Name=WhatsApp Desktop
+Exec=${execPath} --start-hidden %u
+StartupNotify=false
+Terminal=false
+Hidden=false
+`;
+        fs.writeFileSync(autostartFile, content, { mode: 0o644 });
+      } else {
+        if (fs.existsSync(autostartFile)) {
+          fs.unlinkSync(autostartFile);
+        }
+      }
+      return fs.existsSync(autostartFile);
     });
 
     // Modo nao perturbe
