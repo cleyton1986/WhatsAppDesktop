@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop">
+  <id>github.cleyton1986.WhatsAppDesktop</id>
+  <name>WhatsApp Desktop</name>
+  <summary>Unofficial WhatsApp Web Desktop client.</summary>
+  <metadata_license>FSFAP</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>With WhatsApp on the desktop, you can seamlessly sync all of your chats to your computer so that you can chat on whatever device is most convenient to you.</p>
+    <p>NOTE: This wrapper is not verified by, affiliated with, or supported by WhatsApp Inc.</p>
+  </description>
+  <url type="bugtracker">https://github.com/cleyton1986/WhatsAppDesktop/issues</url>
+  <url type="homepage">https://github.com/cleyton1986/WhatsAppDesktop</url>
+  <requires>
+    <display_length compare="ge">medium</display_length>
+  </requires>
+  <recommends>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <control>touch</control>
+  </recommends>
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-chat">intense</content_attribute>
+    <content_attribute id="social-info">intense</content_attribute>
+    <content_attribute id="social-audio">intense</content_attribute>
+    <content_attribute id="social-contacts">intense</content_attribute>
+  </content_rating>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/cleyton1986/WhatsAppDesktop/main/data/screenshots/screenshot-1.png</image>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="1.2.3" date="2022-10-10">
+      <description>
+        <p>New features:</p>
+        <ul>
+          <li>Closing the window now doesn't quit the app</li>
+        </ul>
+        <p>Bug fixes:</p>
+        <ul>
+          <li>Update browser message after suspend</li>
+          <li>Wrong "minimize to tray" label in tray menu on some DEs</li>
+          <li>Missing app icon on KDE</li>
+          <li>Duplicated icon in taskbar on KDE</li>
+        </ul>
+      </description>
+    </release>
+    <!-- Outras releases mantidas... -->
+  </releases>
+  <developer_name>Cleyton Alves</developer_name>
+  <update_contact>cleyton.alves@gmail.com</update_contact>
+</component>

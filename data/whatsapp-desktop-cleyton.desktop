@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=WhatsApp Desktop
+Exec=whatsapp-desktop-cleyton %u
+Type=Application
+Icon=whatsapp
+Comment=An unofficial WhatsApp client for Linux, built with Electron.
+Categories=Utility;Network;Chat;InstantMessaging;
+StartupWMClass=whatsapp-desktop-cleyton
