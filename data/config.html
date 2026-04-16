@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuracoes - WhatsApp Desktop</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #111b21;
+      color: #e9edef;
+      padding: 24px;
+      user-select: none;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      color: #e9edef;
+    }
+
+    h2 {
+      font-size: 14px;
+      font-weight: 500;
+      color: #8696a0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    .account-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .account-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #202c33;
+      border-radius: 8px;
+      padding: 12px 16px;
+      transition: background 0.15s;
+    }
+
+    .account-item:hover {
+      background: #2a3942;
+    }
+
+    .account-name {
+      font-size: 16px;
+      color: #e9edef;
+      flex: 1;
+    }
+
+    .account-name-input {
+      font-size: 16px;
+      color: #e9edef;
+      background: #111b21;
+      border: 1px solid #00a884;
+      border-radius: 4px;
+      padding: 4px 8px;
+      outline: none;
+      flex: 1;
+      margin-right: 8px;
+    }
+
+    .account-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+      font-weight: 500;
+    }
+
+    .btn:hover {
+      opacity: 0.85;
+    }
+
+    .btn-primary {
+      background: #00a884;
+      color: #111b21;
+    }
+
+    .btn-secondary {
+      background: #2a3942;
+      color: #e9edef;
+    }
+
+    .btn-danger {
+      background: transparent;
+      color: #ea0038;
+      padding: 8px 12px;
+    }
+
+    .btn-danger:hover {
+      background: rgba(234, 0, 56, 0.1);
+    }
+
+    .btn-icon {
+      background: transparent;
+      color: #8696a0;
+      padding: 8px;
+      font-size: 16px;
+    }
+
+    .btn-icon:hover {
+      color: #e9edef;
+    }
+
+    .add-section {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .add-input {
+      flex: 1;
+      padding: 10px 14px;
+      background: #202c33;
+      border: 1px solid #2a3942;
+      border-radius: 6px;
+      color: #e9edef;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .add-input:focus {
+      border-color: #00a884;
+    }
+
+    .add-input::placeholder {
+      color: #8696a0;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 32px;
+      color: #8696a0;
+      font-size: 14px;
+    }
+
+    .version {
+      position: fixed;
+      bottom: 12px;
+      right: 16px;
+      font-size: 11px;
+      color: #667781;
+    }
+  </style>
+</head>
+<body>
+  <h1>Configuracoes</h1>
+
+  <h2>Contas WhatsApp</h2>
+  <div id="account-list" class="account-list">
+    <div class="empty-state">Carregando...</div>
+  </div>
+
+  <div class="add-section">
+    <input
+      type="text"
+      id="new-account-name"
+      class="add-input"
+      placeholder="Nome da nova conta (ex: Trabalho)"
+      maxlength="30"
+    />
+    <button class="btn btn-primary" id="btn-add">Adicionar</button>
+  </div>
+
+  <div class="version">WhatsApp Desktop v1.3.0</div>
+
+  <script>
+    const accountList = document.getElementById('account-list');
+    const newAccountInput = document.getElementById('new-account-name');
+    const btnAdd = document.getElementById('btn-add');
+
+    let editingId = null;
+
+    async function loadAccounts() {
+      const accounts = await window.configAPI.getAccounts();
+      renderAccounts(accounts);
+    }
+
+    function renderAccounts(accounts) {
+      if (accounts.length === 0) {
+        accountList.innerHTML = '<div class="empty-state">Nenhuma conta configurada</div>';
+        return;
+      }
+
+      accountList.innerHTML = '';
+      accounts.forEach(account => {
+        const item = document.createElement('div');
+        item.className = 'account-item';
+
+        if (editingId === account.id) {
+          item.innerHTML = `
+            <input class="account-name-input" value="${escapeHtml(account.name)}" id="edit-input-${account.id}" />
+            <div class="account-actions">
+              <button class="btn btn-primary" onclick="saveRename('${account.id}')">Salvar</button>
+              <button class="btn btn-secondary" onclick="cancelEdit()">Cancelar</button>
+            </div>
+          `;
+        } else {
+          item.innerHTML = `
+            <span class="account-name">${escapeHtml(account.name)}</span>
+            <div class="account-actions">
+              <button class="btn btn-icon" onclick="startEdit('${account.id}')" title="Renomear">&#9998;</button>
+              <button class="btn btn-danger" onclick="removeAccount('${account.id}', '${escapeHtml(account.name)}')" title="Remover">Remover</button>
+            </div>
+          `;
+        }
+
+        accountList.appendChild(item);
+      });
+
+      // Foca no input de edicao se estiver editando
+      if (editingId) {
+        const input = document.getElementById('edit-input-' + editingId);
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      }
+    }
+
+    async function addAccount() {
+      const name = newAccountInput.value.trim();
+      if (!name) return;
+      await window.configAPI.addAccount(name);
+      newAccountInput.value = '';
+      await loadAccounts();
+    }
+
+    async function removeAccount(id, name) {
+      if (confirm('Tem certeza que deseja remover a conta "' + name + '"?\nVoce precisara escanear o QR Code novamente.')) {
+        const accounts = await window.configAPI.removeAccount(id);
+        renderAccounts(accounts);
+      }
+    }
+
+    function startEdit(id) {
+      editingId = id;
+      loadAccounts();
+    }
+
+    function cancelEdit() {
+      editingId = null;
+      loadAccounts();
+    }
+
+    async function saveRename(id) {
+      const input = document.getElementById('edit-input-' + id);
+      const name = input.value.trim();
+      if (!name) return;
+      editingId = null;
+      const accounts = await window.configAPI.renameAccount(id, name);
+      renderAccounts(accounts);
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Event listeners
+    btnAdd.addEventListener('click', addAccount);
+    newAccountInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') addAccount();
+    });
+
+    // Carrega contas ao iniciar
+    loadAccounts();
+  </script>
+</body>
+</html>
