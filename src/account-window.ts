@@ -1,4 +1,4 @@
-import { BrowserWindow } from "electron";
+import { BrowserWindow, ipcMain, session, Notification as ElectronNotification } from "electron";
 import path from "path";
 import { Account } from "./account";
 import { transformDeepLink } from "./util";
@@ -23,6 +23,8 @@ export default class AccountWindow {
 
   // Callback para notificar o AppController sobre mudancas de unread
   public onUnreadChange?: (accountWindow: AccountWindow) => void;
+  // Callback para verificar se o modo nao perturbe esta ativo
+  public isDndActive?: () => boolean;
 
   constructor(account: Account) {
     this.account = account;
@@ -67,6 +69,18 @@ export default class AccountWindow {
 
     this.window.webContents.on("dom-ready", () => {
       this.injectNotificationOverride();
+      this.injectAudioMonitor();
+    });
+
+    // Controla permissao de notificacao baseado no DnD
+    const ses = session.fromPartition(`persist:${this.account.id}`);
+    ses.setPermissionRequestHandler((webContents, permission, callback) => {
+      if (permission === "notifications") {
+        const dndActive = this.isDndActive?.() ?? false;
+        callback(!dndActive);
+        return;
+      }
+      callback(true);
     });
 
     this.moduleManager.onLoad();
@@ -144,12 +158,24 @@ export default class AccountWindow {
   }
 
   private injectNotificationOverride() {
+    const accountName = this.account.name;
     this.window.webContents.executeJavaScript(`
       (function() {
         const OriginalNotification = window.Notification;
+        const accountName = ${JSON.stringify(accountName)};
         window.Notification = class extends OriginalNotification {
           constructor(title, options) {
-            super(title, options);
+            const modifiedOptions = Object.assign({}, options);
+            if (modifiedOptions.body) {
+              modifiedOptions.body = '[' + accountName + '] ' + modifiedOptions.body;
+            } else {
+              modifiedOptions.body = '[' + accountName + ']';
+            }
+            super(title, modifiedOptions);
+            // Envia dados da notificacao para o main process (resposta rapida)
+            if (window.electronAPI && window.electronAPI.sendNotificationData) {
+              window.electronAPI.sendNotificationData({ title: title, body: modifiedOptions.body });
+            }
             this.addEventListener('click', () => {
               if (window.electronAPI && window.electronAPI.sendNotificationClick) {
                 window.electronAPI.sendNotificationClick();
@@ -159,6 +185,78 @@ export default class AccountWindow {
         };
         window.Notification.permission = OriginalNotification.permission;
         window.Notification.requestPermission = OriginalNotification.requestPermission.bind(OriginalNotification);
+      })();
+    `);
+
+    // Escuta dados de notificacao e cria notificacao nativa do Electron com acao de resposta
+    const handler = (_event: any, data: { title: string; body: string }) => {
+      if (!ElectronNotification.isSupported()) return;
+
+      const notification = new ElectronNotification({
+        title: data.title,
+        body: data.body,
+        hasReply: true,
+        replyPlaceholder: "Responder...",
+      });
+
+      notification.on("click", () => {
+        this.show();
+      });
+
+      notification.on("reply", (_event, reply) => {
+        // Envia a resposta para o renderer para ser digitada no campo de mensagem
+        this.window.webContents.executeJavaScript(`
+          (function() {
+            // Foca no campo de mensagem e insere o texto
+            const input = document.querySelector('[contenteditable="true"][data-tab="10"]') ||
+                          document.querySelector('[contenteditable="true"][role="textbox"]') ||
+                          document.querySelector('footer [contenteditable="true"]');
+            if (input) {
+              input.focus();
+              document.execCommand('insertText', false, ${JSON.stringify(reply)});
+              // Simula Enter para enviar
+              setTimeout(() => {
+                const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true });
+                input.dispatchEvent(enterEvent);
+              }, 100);
+            }
+          })();
+        `);
+      });
+
+      notification.show();
+    };
+
+    // Remove handler anterior se existir e registra novo
+    ipcMain.removeAllListeners("notification-data");
+    ipcMain.on("notification-data", handler);
+  }
+
+  /**
+   * Injeta monitor de audio que detecta quando um audio esta tocando
+   * e envia o estado para o main process para o mini-player flutuante.
+   */
+  private injectAudioMonitor() {
+    this.window.webContents.executeJavaScript(`
+      (function() {
+        let lastState = null;
+        setInterval(() => {
+          const audios = document.querySelectorAll('audio');
+          let playing = null;
+          audios.forEach(audio => {
+            if (!audio.paused && audio.duration > 0) {
+              playing = { playing: true, currentTime: audio.currentTime, duration: audio.duration };
+            }
+          });
+          const state = playing || { playing: false, currentTime: 0, duration: 0 };
+          const stateKey = state.playing + '-' + Math.floor(state.currentTime);
+          if (stateKey !== lastState) {
+            lastState = stateKey;
+            if (window.electronAPI && window.electronAPI.sendAudioState) {
+              window.electronAPI.sendAudioState(state);
+            }
+          }
+        }, 1000);
       })();
     `);
   }
