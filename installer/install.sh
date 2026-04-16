@@ -1,11 +1,11 @@
 #!/bin/bash
 # Script de instalação do WhatsApp Desktop para Linux (AppImage)
-# Esse script assume que está localizado na pasta "installer" e que o AppImage está em "../build/whatsapp-desktop-cleyton-1.2.3-2.AppImage"
+# Esse script assume que está localizado na pasta "installer" e que o AppImage está em "../build/whatsapp-desktop-cleyton-2.0.0.AppImage"
 
 # Determina o diretório deste script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Caminho absoluto para o AppImage na pasta build
-APPIMAGE_PATH="$SCRIPT_DIR/../build/whatsapp-desktop-cleyton-1.2.3-2.AppImage"
+APPIMAGE_PATH="$SCRIPT_DIR/../build/whatsapp-desktop-cleyton-2.0.0.AppImage"
 
 INSTALL_DIR="/opt/whatsapp-desktop-cleyton"
 BIN_LINK="/usr/local/bin/whatsapp-desktop-cleyton"
@@ -35,11 +35,11 @@ sudo cp "$APPIMAGE_PATH" "$INSTALL_DIR/"
 
 # Garante que o AppImage copiado tenha permissão de execução
 echo "Definindo permissões de execução para o AppImage no diretório de instalação..."
-sudo chmod +x "$INSTALL_DIR/whatsapp-desktop-cleyton-1.2.3-2.AppImage"
+sudo chmod +x "$INSTALL_DIR/whatsapp-desktop-cleyton-2.0.0.AppImage"
 
 # Cria um symlink em /usr/local/bin para facilitar a execução
 echo "Criando symlink em $BIN_LINK..."
-sudo ln -sf "$INSTALL_DIR/whatsapp-desktop-cleyton-1.2.3-2.AppImage" "$BIN_LINK"
+sudo ln -sf "$INSTALL_DIR/whatsapp-desktop-cleyton-2.0.0.AppImage" "$BIN_LINK"
 
 # Copia o ícone (se existir) para o diretório de instalação
 if [ -f "$ICON_SOURCE" ]; then
