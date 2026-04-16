@@ -39,12 +39,14 @@ export default class TrayModule {
       menuItems.push({ type: "separator" });
     }
 
-    // Lista cada conta com seu status
+    // Lista cada conta com indicador de status
     for (const aw of accountWindows) {
+      const isVisible = aw.window.isVisible();
+      const statusIcon = aw.unreadCount > 0 ? "\uD83D\uDD34" : isVisible ? "\uD83D\uDFE2" : "\u26AA";
       const unreadLabel =
         aw.unreadCount > 0 ? ` (${aw.unreadCount})` : "";
       menuItems.push({
-        label: `${aw.account.name}${unreadLabel}`,
+        label: `${statusIcon} ${aw.account.name}${unreadLabel}`,
         click: () => aw.show(),
       });
     }
