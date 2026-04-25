@@ -1,4 +1,5 @@
-import { BrowserWindow, session } from "electron";
+import { app, BrowserWindow, dialog, session } from "electron";
+import fs from "fs";
 import path from "path";
 import { Account } from "./account";
 import { transformDeepLink } from "./util";
@@ -95,6 +96,47 @@ export default class AccountWindow {
         return;
       }
       callback(true);
+    });
+
+    // Intercepta downloads para mostrar dialog na frente da janela
+    ses.on("will-download", (event, item) => {
+      event.preventDefault();
+      const filename = item.getFilename();
+      const downloadsPath = app.getPath("downloads");
+      const defaultPath = path.join(downloadsPath, filename);
+
+      dialog
+        .showSaveDialog(this.window, {
+          title: "Salvar como",
+          defaultPath,
+          buttonLabel: "Salvar",
+        })
+        .then((result) => {
+          if (result.canceled || !result.filePath) {
+            item.cancel();
+            return;
+          }
+          // Continua o download para o caminho escolhido
+          const savePath = result.filePath;
+          const url = item.getURL();
+          ses.downloadURL(url);
+          ses.once("will-download", (_e, newItem) => {
+            newItem.setSavePath(savePath);
+            newItem.on("done", (_event, state) => {
+              if (state === "completed") {
+                console.log(`[${this.account.name}] Download concluido: ${savePath}`);
+              } else {
+                console.log(`[${this.account.name}] Download falhou: ${state}`);
+                try {
+                  if (fs.existsSync(savePath)) fs.unlinkSync(savePath);
+                } catch {}
+              }
+            });
+          });
+        })
+        .catch(() => {
+          item.cancel();
+        });
     });
 
     this.moduleManager.onLoad();
