@@ -75,10 +75,15 @@ export default class AccountWindow {
       this.injectNotificationOverride();
       this.privacyCssKey = undefined;
       this.applyPrivacy();
+      this.injectViewOnceHandler();
     });
 
     // Log TODAS as console-message para debug
     this.window.webContents.on("console-message", (_event, level, message) => {
+      if (message.startsWith("__WA_VIEWONCE_MEDIA__")) {
+        this.handleViewOnceMedia(message);
+        return;
+      }
       if (message.startsWith("__WA_NOTIF__")) {
         console.log(`[${this.account.name}] NOTIFICACAO CAPTURADA:`, message);
         try {
@@ -243,6 +248,82 @@ export default class AccountWindow {
         this.onUnreadChange?.(this);
       }
     );
+  }
+
+  private injectViewOnceHandler() {
+    this.window.webContents.executeJavaScript(`
+      (function() {
+        if (window.__waViewOnceHandler) return;
+        window.__waViewOnceHandler = true;
+
+        function blobToBase64(url, type, cb) {
+          var xhr = new XMLHttpRequest();
+          xhr.open('GET', url, true);
+          xhr.responseType = 'blob';
+          xhr.onload = function() {
+            var reader = new FileReader();
+            reader.onloadend = function() { cb(reader.result, type); };
+            reader.readAsDataURL(xhr.response);
+          };
+          xhr.onerror = function() { cb(null, type); };
+          xhr.send();
+        }
+
+        function tryOpenViewOnce(btn) {
+          var container = btn.closest('[data-testid="msg-container"]');
+          if (!container) return;
+
+          // Tenta img ou video com blob src
+          var img = container.querySelector('img[src^="blob:"]');
+          var vid = container.querySelector('video[src^="blob:"]');
+          var media = img || vid;
+          var mediaType = img ? 'image' : 'video';
+          var src = media ? media.src : null;
+
+          if (src) {
+            blobToBase64(src, mediaType, function(dataUrl, type) {
+              if (dataUrl) {
+                console.log('__WA_VIEWONCE_MEDIA__' + JSON.stringify({ type: type, dataUrl: dataUrl }));
+              }
+            });
+          }
+        }
+
+        document.addEventListener('click', function(e) {
+          var target = e.target;
+          // Sobe ate 6 niveis procurando o botao com wds-ic-view-once
+          for (var i = 0; i < 6; i++) {
+            if (!target) break;
+            var svg = target.querySelector ? target.querySelector('title') : null;
+            if (svg && svg.textContent === 'wds-ic-view-once') {
+              e.stopImmediatePropagation();
+              e.preventDefault();
+              tryOpenViewOnce(target);
+              return;
+            }
+            var title = target.querySelector ? target.querySelector('svg title') : null;
+            if (title && title.textContent === 'wds-ic-view-once') {
+              e.stopImmediatePropagation();
+              e.preventDefault();
+              tryOpenViewOnce(target);
+              return;
+            }
+            target = target.parentElement;
+          }
+        }, true);
+
+      })();
+    `).catch(() => {});
+  }
+
+  private handleViewOnceMedia(message: string) {
+    try {
+      const json = JSON.parse(message.substring("__WA_VIEWONCE_MEDIA__".length));
+      const { openViewOnceWindow } = require("./viewonce-window");
+      openViewOnceWindow(json.dataUrl, json.type);
+    } catch (e) {
+      console.error(`[${this.account.name}] Erro ao abrir view-once:`, e);
+    }
   }
 
   public async applyPrivacy() {
