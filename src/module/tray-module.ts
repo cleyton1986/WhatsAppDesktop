@@ -19,7 +19,6 @@ export default class TrayModule {
 
   public onLoad() {
     this.updateFromAccounts();
-    this.registerTrayClick();
   }
 
   /**
@@ -91,12 +90,6 @@ export default class TrayModule {
 
     // Icone: muda se qualquer conta tem mensagens nao lidas
     this.tray.setImage(totalUnread > 0 ? ICON_UNREAD : ICON);
-  }
-
-  private registerTrayClick() {
-    this.tray.on("click", () => {
-      this.tray.popUpContextMenu();
-    });
   }
 
   private openConfig() {
