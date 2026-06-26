@@ -10,7 +10,10 @@
     "start": "yarn dist && electron .",
     "build": "yarn dist && electron-builder"
   },
-  "author": "Cleyton Alves",
+  "author": {
+    "name": "Cleyton Alves",
+    "email": "cleyton1986@gmail.com"
+  },
   "license": "MIT",
   "dependencies": {
     "electron-store": "^8.1.0"
@@ -36,6 +39,12 @@
       "target": [
         {
           "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
           "arch": [
             "x64"
           ]
