@@ -19,6 +19,7 @@ export default class TrayModule {
 
   public onLoad() {
     this.updateFromAccounts();
+    this.registerTrayClick();
   }
 
   /**
@@ -90,6 +91,21 @@ export default class TrayModule {
 
     // Icone: muda se qualquer conta tem mensagens nao lidas
     this.tray.setImage(totalUnread > 0 ? ICON_UNREAD : ICON);
+  }
+
+  private registerTrayClick() {
+    this.tray.on("click", () => {
+      const windows = this.controller.getAccountWindows();
+      if (windows.length === 0) return;
+      const anyVisible = windows.some((aw) => aw.window.isVisible());
+      if (anyVisible) {
+        windows.forEach((aw) => aw.hide());
+      } else {
+        windows.forEach((aw) => {
+          if (!aw.account.vault?.enabled) aw.show();
+        });
+      }
+    });
   }
 
   private openConfig() {
