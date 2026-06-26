@@ -371,6 +371,14 @@ Hidden=false
       return false;
     });
 
+    // Privacidade (blur) por conta
+    ipcMain.handle("set-privacy", async (_event, id: string, blurSidebar: boolean, blurChat: boolean) => {
+      this.accountManager.setPrivacy(id, blurSidebar, blurChat);
+      const aw = this.accountWindows.get(id);
+      if (aw) await aw.applyPrivacy();
+      return this.accountManager.getAccounts();
+    });
+
     // Cofre (vault) por conta
     ipcMain.handle("set-vault", (_event, id: string, enabled: boolean, pin?: string, pinLength?: 4 | 6, notificationsEnabled?: boolean) => {
       this.accountManager.setVault(id, enabled, pin, pinLength ?? 4, notificationsEnabled ?? false);

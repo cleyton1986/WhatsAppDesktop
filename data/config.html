@@ -100,6 +100,9 @@
     .vault-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
     .vault-btn-row{display:flex;gap:8px;align-items:center;margin-bottom:4px}
     .vault-badge{font-size:11px;color:var(--accent);background:rgba(0,168,132,0.12);border-radius:4px;padding:2px 6px;font-weight:500}
+    .privacy-row{display:flex;align-items:center;gap:14px;margin-top:5px}
+    .privacy-item{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-secondary);cursor:pointer}
+    .privacy-item input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px;cursor:pointer}
   </style>
 </head>
 <body>
@@ -302,6 +305,10 @@ function renderAccounts(accounts) {
             '</select>' +
             (account.vault && account.vault.enabled ? '<span class="vault-badge">🔒 Cofre ativado</span>' : '') +
           '</div>' +
+          '<div class="privacy-row">' +
+            '<label class="privacy-item"><input type="checkbox" id="priv-sidebar-' + account.id + '"' + (account.privacy && account.privacy.blurSidebar ? ' checked' : '') + '> 🙈 Turvar lista</label>' +
+            '<label class="privacy-item"><input type="checkbox" id="priv-chat-' + account.id + '"' + (account.privacy && account.privacy.blurChat ? ' checked' : '') + '> 💬 Turvar conversa</label>' +
+          '</div>' +
         '</div>' +
         '<div class="account-actions">' +
           '<button class="btn btn-secondary btn-sm" id="vault-btn-' + account.id + '">' + (account.vault && account.vault.enabled ? '🔒' : '🔓') + ' Cofre</button>' +
@@ -317,6 +324,8 @@ function renderAccounts(accounts) {
       item.querySelector('#vault-btn-' + account.id).onclick = function() { openVaultModal(account); };
       item.querySelector('#edit-btn-' + account.id).onclick = function() { startEdit(account.id); };
       item.querySelector('#del-btn-' + account.id).onclick = function() { removeAccount(account.id, account.name); };
+      item.querySelector('#priv-sidebar-' + account.id).onchange = function() { setPrivacy(account.id, item); };
+      item.querySelector('#priv-chat-' + account.id).onchange = function() { setPrivacy(account.id, item); };
     }
     accountList.appendChild(item);
   });
@@ -347,6 +356,12 @@ async function setEmoji(id, emoji) {
 
 async function setTheme(id, theme) {
   await window.configAPI.setTheme(id, theme);
+}
+
+async function setPrivacy(id, item) {
+  var blurSidebar = item.querySelector('#priv-sidebar-' + id).checked;
+  var blurChat = item.querySelector('#priv-chat-' + id).checked;
+  await window.configAPI.setPrivacy(id, blurSidebar, blurChat);
 }
 
 function startEdit(id) { editingId = id; loadAccounts(); }

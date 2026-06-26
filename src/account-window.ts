@@ -27,6 +27,8 @@ export default class AccountWindow {
   // Callback para verificar se o modo nao perturbe esta ativo
   public isDndActive?: () => boolean;
 
+  private privacyCssKey?: string;
+
   constructor(account: Account) {
     this.account = account;
 
@@ -71,6 +73,8 @@ export default class AccountWindow {
     this.window.webContents.on("dom-ready", () => {
       console.log(`[${this.account.name}] dom-ready - injetando override de Notification`);
       this.injectNotificationOverride();
+      this.privacyCssKey = undefined;
+      this.applyPrivacy();
     });
 
     // Log TODAS as console-message para debug
@@ -239,6 +243,57 @@ export default class AccountWindow {
         this.onUnreadChange?.(this);
       }
     );
+  }
+
+  public async applyPrivacy() {
+    if (this.window.isDestroyed()) return;
+
+    if (this.privacyCssKey) {
+      await this.window.webContents.removeInsertedCSS(this.privacyCssKey).catch(() => {});
+      this.privacyCssKey = undefined;
+    }
+
+    const { blurSidebar = false, blurChat = false } = this.account.privacy ?? {};
+    if (!blurSidebar && !blurChat) return;
+
+    let css = "";
+    if (blurSidebar) {
+      css += `
+        #pane-side { filter: blur(5px); transition: filter 0.2s ease; user-select: none; }
+        #pane-side:hover { filter: none; user-select: auto; }
+        body.wa-reveal-sidebar #pane-side { filter: none; user-select: auto; }
+      `;
+    }
+    if (blurChat) {
+      css += `
+        #main { filter: blur(5px); transition: filter 0.2s ease; user-select: none; }
+        #main:hover { filter: none; user-select: auto; }
+        body.wa-reveal-chat #main { filter: none; user-select: auto; }
+      `;
+    }
+
+    this.privacyCssKey = await this.window.webContents.insertCSS(css).catch(() => undefined);
+
+    const js = `
+      (function() {
+        if (window.__waPrivacyScrollInit) return;
+        window.__waPrivacyScrollInit = true;
+        var timers = {};
+        function revealOnScroll(el, cls) {
+          if (!el) return;
+          el.addEventListener('scroll', function() {
+            document.body.classList.add(cls);
+            clearTimeout(timers[cls]);
+            timers[cls] = setTimeout(function() {
+              document.body.classList.remove(cls);
+            }, 3000);
+          }, { passive: true, capture: true });
+        }
+        ${blurSidebar ? "revealOnScroll(document.querySelector('#pane-side'), 'wa-reveal-sidebar');" : ""}
+        ${blurChat ? "revealOnScroll(document.querySelector('#main'), 'wa-reveal-chat');" : ""}
+      })();
+    `;
+    this.window.webContents.executeJavaScript(js).catch(() => {});
   }
 
   private injectNotificationOverride() {

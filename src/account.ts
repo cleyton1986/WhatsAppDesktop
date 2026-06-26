@@ -8,12 +8,18 @@ export interface AccountVault {
   notificationsEnabled: boolean;
 }
 
+export interface AccountPrivacy {
+  blurSidebar: boolean;
+  blurChat: boolean;
+}
+
 export interface Account {
   id: string;
   name: string;
   emoji: string;
   theme: "system" | "dark" | "light";
   vault?: AccountVault;
+  privacy?: AccountPrivacy;
 }
 
 /**
@@ -136,6 +142,17 @@ export default class AccountManager {
     if (!account?.vault?.enabled) return false;
     const hash = createHash("sha256").update(pin).digest("hex");
     return hash === account.vault.pinHash;
+  }
+
+  /**
+   * Atualiza as configuracoes de privacidade (blur) de uma conta.
+   */
+  public setPrivacy(id: string, blurSidebar: boolean, blurChat: boolean): void {
+    const accounts = this.getAccounts();
+    const account = accounts.find((a) => a.id === id);
+    if (!account) return;
+    account.privacy = { blurSidebar, blurChat };
+    this.store.set("accounts", accounts);
   }
 
   /**

@@ -33,6 +33,10 @@ contextBridge.exposeInMainWorld("configAPI", {
   exportConfig: () => ipcRenderer.invoke("export-config"),
   importConfig: () => ipcRenderer.invoke("import-config"),
 
+  // Privacidade (blur)
+  setPrivacy: (id: string, blurSidebar: boolean, blurChat: boolean) =>
+    ipcRenderer.invoke("set-privacy", id, blurSidebar, blurChat),
+
   // Cofre (vault)
   setVault: (id: string, enabled: boolean, pin?: string, pinLength?: 4 | 6, notificationsEnabled?: boolean) =>
     ipcRenderer.invoke("set-vault", id, enabled, pin, pinLength, notificationsEnabled),
