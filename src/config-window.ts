@@ -28,10 +28,10 @@ export function openConfigWindow() {
 
   configWindow = new BrowserWindow({
     title: "Configuracoes - WhatsApp Desktop",
-    width: 600,
-    height: 500,
-    minWidth: 500,
-    minHeight: 400,
+    width: 720,
+    height: 680,
+    minWidth: 640,
+    minHeight: 580,
     resizable: true,
     webPreferences: {
       preload: path.join(__dirname, "preload-config.js"),

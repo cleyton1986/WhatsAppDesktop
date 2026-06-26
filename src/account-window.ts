@@ -1,4 +1,5 @@
-import { BrowserWindow } from "electron";
+import { app, BrowserWindow, session } from "electron";
+import fs from "fs";
 import path from "path";
 import { Account } from "./account";
 import { transformDeepLink } from "./util";
@@ -23,6 +24,8 @@ export default class AccountWindow {
 
   // Callback para notificar o AppController sobre mudancas de unread
   public onUnreadChange?: (accountWindow: AccountWindow) => void;
+  // Callback para verificar se o modo nao perturbe esta ativo
+  public isDndActive?: () => boolean;
 
   constructor(account: Account) {
     this.account = account;
@@ -66,8 +69,93 @@ export default class AccountWindow {
     this.window.loadURL("https://web.whatsapp.com/", { userAgent: USER_AGENT });
 
     this.window.webContents.on("dom-ready", () => {
+      console.log(`[${this.account.name}] dom-ready - injetando override de Notification`);
       this.injectNotificationOverride();
     });
+
+    // Log TODAS as console-message para debug
+    this.window.webContents.on("console-message", (_event, level, message) => {
+      if (message.startsWith("__WA_NOTIF__")) {
+        console.log(`[${this.account.name}] NOTIFICACAO CAPTURADA:`, message);
+        try {
+          const data = JSON.parse(message.substring("__WA_NOTIF__".length));
+          const { pushNotification } = require("./notification-window");
+          pushNotification(this.account.id, data.title, data.body, this.account.emoji || "");
+        } catch (e) {
+          console.error(`[${this.account.name}] Erro ao processar notificacao:`, e);
+        }
+      }
+    });
+
+    // Controla permissao de notificacao baseado no DnD
+    const ses = session.fromPartition(`persist:${this.account.id}`);
+    ses.setPermissionRequestHandler((webContents, permission, callback) => {
+      if (permission === "notifications") {
+        const dndActive = this.isDndActive?.() ?? false;
+        callback(!dndActive);
+        return;
+      }
+      callback(true);
+    });
+
+    // Settings global compartilhado entre contas para ultimo diretorio usado
+    const downloadSettings = new Settings("downloads");
+
+    // Sugere nome com data/hora atual e abre no ultimo diretorio usado
+    ses.on("will-download", (_event, item) => {
+      const filename = item.getFilename();
+      const ext = path.extname(filename);
+
+      // Recupera ultimo diretorio usado, ou Downloads como padrao
+      const lastDir = downloadSettings.get("lastDir", app.getPath("downloads")) as string;
+      const targetDir = fs.existsSync(lastDir) ? lastDir : app.getPath("downloads");
+
+      // Gera timestamp atual no formato YYYY-MM-DD at HH.MM.SS
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const dateStr =
+        `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
+        ` at ${pad(now.getHours())}.${pad(now.getMinutes())}.${pad(now.getSeconds())}`;
+
+      // Detecta o tipo pelo nome original ou pela extensao
+      let prefix = "WhatsApp File";
+      if (/^WhatsApp\s+(Image|Video|Audio|Document|Ptt)/i.test(filename)) {
+        const match = filename.match(/^(WhatsApp\s+\w+)/i);
+        if (match) prefix = match[1];
+      } else if (/\.(jpe?g|png|gif|webp|heic)$/i.test(ext)) {
+        prefix = "WhatsApp Image";
+      } else if (/\.(mp4|mov|webm|mkv|avi)$/i.test(ext)) {
+        prefix = "WhatsApp Video";
+      } else if (/\.(mp3|ogg|m4a|wav|opus)$/i.test(ext)) {
+        prefix = "WhatsApp Audio";
+      } else if (/\.(pdf|docx?|xlsx?|pptx?|txt|zip)$/i.test(ext)) {
+        prefix = "WhatsApp Document";
+      }
+
+      let finalName = `${prefix} ${dateStr}${ext}`;
+
+      // Se mesmo assim ja existir, adiciona contador
+      let counter = 1;
+      while (fs.existsSync(path.join(targetDir, finalName))) {
+        finalName = `${prefix} ${dateStr} (${counter})${ext}`;
+        counter++;
+      }
+
+      item.setSaveDialogOptions({
+        defaultPath: path.join(targetDir, finalName),
+      });
+
+      // Memoriza o diretorio escolhido apos o download concluir
+      item.once("done", (_e, state) => {
+        if (state === "completed") {
+          const savedPath = item.getSavePath();
+          if (savedPath) {
+            downloadSettings.set("lastDir", path.dirname(savedPath));
+          }
+        }
+      });
+    });
+
 
     this.moduleManager.onLoad();
   }
@@ -144,22 +232,32 @@ export default class AccountWindow {
   }
 
   private injectNotificationOverride() {
+    const accountEmoji = this.account.emoji || "";
+    const accountName = this.account.name;
+    const accountLabel = accountEmoji ? `${accountEmoji} ${accountName}` : accountName;
+
+    // Substitui Notification completamente - usa console.log com prefixo especial
+    // para comunicar com o main process (unica forma confiavel com contextIsolation + sandbox)
     this.window.webContents.executeJavaScript(`
       (function() {
-        const OriginalNotification = window.Notification;
-        window.Notification = class extends OriginalNotification {
-          constructor(title, options) {
-            super(title, options);
-            this.addEventListener('click', () => {
-              if (window.electronAPI && window.electronAPI.sendNotificationClick) {
-                window.electronAPI.sendNotificationClick();
-              }
-            });
-          }
+        var label = ${JSON.stringify(accountLabel)};
+        console.log('__WA_INJECT_OK__ label=' + label);
+        function FakeNotification(title, options) {
+          var opts = options || {};
+          var body = opts.body ? '[' + label + '] ' + opts.body : '[' + label + ']';
+          console.log('__WA_NOTIF__' + JSON.stringify({ title: title, body: body }));
+        }
+        FakeNotification.permission = 'granted';
+        FakeNotification.requestPermission = function(cb) {
+          if (cb) cb('granted');
+          return Promise.resolve('granted');
         };
-        window.Notification.permission = OriginalNotification.permission;
-        window.Notification.requestPermission = OriginalNotification.requestPermission.bind(OriginalNotification);
+        window.Notification = FakeNotification;
       })();
-    `);
+    `).then(() => {
+      console.log('[' + this.account.name + '] Inject executado com sucesso');
+    }).catch((e: any) => {
+      console.error('[' + this.account.name + '] Erro no inject:', e);
+    });
   }
 }

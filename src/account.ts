@@ -3,6 +3,8 @@ import Store from "electron-store";
 export interface Account {
   id: string;
   name: string;
+  emoji: string;
+  theme: "system" | "dark" | "light";
 }
 
 /**
@@ -33,10 +35,12 @@ export default class AccountManager {
   /**
    * Adiciona uma nova conta e retorna ela.
    */
-  public addAccount(name: string): Account {
+  public addAccount(name: string, emoji: string = ""): Account {
     const account: Account = {
       id: `account-${this.nextId++}`,
       name,
+      emoji: emoji || "",
+      theme: "system",
     };
     const accounts = this.getAccounts();
     accounts.push(account);
@@ -60,6 +64,30 @@ export default class AccountManager {
     const account = accounts.find((a) => a.id === id);
     if (account) {
       account.name = newName;
+      this.store.set("accounts", accounts);
+    }
+  }
+
+  /**
+   * Atualiza o emoji de uma conta.
+   */
+  public setEmoji(id: string, emoji: string): void {
+    const accounts = this.getAccounts();
+    const account = accounts.find((a) => a.id === id);
+    if (account) {
+      account.emoji = emoji;
+      this.store.set("accounts", accounts);
+    }
+  }
+
+  /**
+   * Atualiza o tema de uma conta.
+   */
+  public setTheme(id: string, theme: "system" | "dark" | "light"): void {
+    const accounts = this.getAccounts();
+    const account = accounts.find((a) => a.id === id);
+    if (account) {
+      account.theme = theme;
       this.store.set("accounts", accounts);
     }
   }
