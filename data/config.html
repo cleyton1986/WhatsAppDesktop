@@ -80,6 +80,25 @@
     .emoji-picker-actions{display:flex;gap:8px;margin-top:12px;justify-content:flex-end}
 
     .edit-input{font-size:14px;padding:6px 10px;background:var(--bg-primary);border:1px solid var(--accent);border-radius:6px;color:var(--text-primary);outline:none;flex:1}
+
+    /* Vault modal */
+    .vault-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:200;align-items:center;justify-content:center}
+    .vault-overlay.active{display:flex}
+    .vault-modal{background:var(--bg-secondary);border-radius:12px;padding:24px;width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.4)}
+    .vault-modal-title{font-size:16px;font-weight:600;margin-bottom:4px}
+    .vault-modal-sub{font-size:12px;color:var(--text-secondary);margin-bottom:20px}
+    .vault-field{margin-bottom:14px}
+    .vault-field label{font-size:12px;color:var(--text-secondary);display:block;margin-bottom:5px}
+    .vault-pin-row{display:flex;gap:8px}
+    .vault-pin-input{width:44px;height:50px;text-align:center;font-size:20px;font-weight:600;background:var(--bg-primary);border:2px solid var(--border);border-radius:8px;color:var(--text-primary);outline:none;caret-color:transparent}
+    .vault-pin-input:focus{border-color:var(--accent)}
+    .vault-pin-input.error{border-color:var(--danger);animation:vshake 0.35s}
+    @keyframes vshake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+    .vault-toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+    .vault-toggle-row span{font-size:13px}
+    .vault-error{font-size:12px;color:var(--danger);min-height:16px;margin-bottom:10px}
+    .vault-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
+    .vault-btn-row{display:flex;gap:8px;align-items:center;margin-bottom:4px}
   </style>
 </head>
 <body>
@@ -126,6 +145,20 @@
   </div>
 
   <div class="version">WhatsApp Desktop v2.0.0</div>
+
+  <!-- Vault Modal -->
+  <div class="vault-overlay" id="vault-overlay">
+    <div class="vault-modal">
+      <div class="vault-modal-title" id="vault-modal-title">🔒 Cofre</div>
+      <div class="vault-modal-sub" id="vault-modal-sub"></div>
+      <div id="vault-modal-body"></div>
+      <div class="vault-error" id="vault-error"></div>
+      <div class="vault-actions">
+        <button class="btn btn-secondary btn-sm" id="vault-cancel">Cancelar</button>
+        <button class="btn btn-primary btn-sm" id="vault-confirm">Confirmar</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Emoji Picker Overlay -->
   <div class="emoji-picker-overlay" id="emoji-overlay">
@@ -269,6 +302,7 @@ function renderAccounts(accounts) {
           '</div>' +
         '</div>' +
         '<div class="account-actions">' +
+          '<button class="btn btn-secondary btn-sm" id="vault-btn-' + account.id + '">' + (account.vault && account.vault.enabled ? '🔒' : '🔓') + ' Cofre</button>' +
           '<button class="btn btn-secondary btn-sm" id="edit-btn-' + account.id + '">Editar</button>' +
           '<button class="btn btn-danger btn-sm" id="del-btn-' + account.id + '">Remover</button>' +
         '</div>';
@@ -278,6 +312,7 @@ function renderAccounts(accounts) {
         openEmojiPicker(function(e) { setEmoji(account.id, e); });
       };
       item.querySelector('#theme-' + account.id).onchange = function() { setTheme(account.id, this.value); };
+      item.querySelector('#vault-btn-' + account.id).onclick = function() { openVaultModal(account); };
       item.querySelector('#edit-btn-' + account.id).onclick = function() { startEdit(account.id); };
       item.querySelector('#del-btn-' + account.id).onclick = function() { removeAccount(account.id, account.name); };
     }
@@ -362,6 +397,189 @@ document.getElementById('btn-import').onclick = async function() {
   var ok = await window.configAPI.importConfig();
   if (ok) { this.textContent = 'Importado!'; var b = this; setTimeout(function() { b.textContent = 'Importar configuracoes'; }, 1500); loadAccounts(); loadDnd(); loadAutostart(); }
 };
+
+// --- Vault Modal ---
+var vaultOverlay = document.getElementById('vault-overlay');
+var vaultError = document.getElementById('vault-error');
+var vaultCurrentAccount = null;
+var vaultConfirmAction = null;
+
+document.getElementById('vault-cancel').onclick = function() { closeVaultModal(); };
+vaultOverlay.onclick = function(e) { if (e.target === vaultOverlay) closeVaultModal(); };
+
+function closeVaultModal() {
+  vaultOverlay.classList.remove('active');
+  vaultCurrentAccount = null;
+  vaultConfirmAction = null;
+  vaultError.textContent = '';
+}
+
+function makePinRow(id, len) {
+  var row = document.createElement('div');
+  row.className = 'vault-pin-row';
+  row.id = id;
+  for (var i = 0; i < len; i++) {
+    var inp = document.createElement('input');
+    inp.type = 'password';
+    inp.inputMode = 'numeric';
+    inp.maxLength = 1;
+    inp.className = 'vault-pin-input';
+    inp.dataset.idx = i;
+    inp.dataset.group = id;
+    inp.addEventListener('input', vaultPinInput);
+    inp.addEventListener('keydown', vaultPinKeydown);
+    row.appendChild(inp);
+  }
+  return row;
+}
+
+function vaultPinInput(e) {
+  var inp = e.target;
+  var val = inp.value.replace(/\D/g,'');
+  inp.value = val ? val[val.length-1] : '';
+  vaultError.textContent = '';
+  var idx = parseInt(inp.dataset.idx);
+  var siblings = document.querySelectorAll('[data-group="' + inp.dataset.group + '"]');
+  if (inp.value && idx < siblings.length - 1) siblings[idx+1].focus();
+}
+
+function vaultPinKeydown(e) {
+  var idx = parseInt(e.target.dataset.idx);
+  var siblings = document.querySelectorAll('[data-group="' + e.target.dataset.group + '"]');
+  if (e.key === 'Backspace' && !e.target.value && idx > 0) siblings[idx-1].focus();
+  if (e.key === 'Enter') document.getElementById('vault-confirm').click();
+}
+
+function getPinValue(groupId) {
+  return Array.from(document.querySelectorAll('[data-group="' + groupId + '"]')).map(function(i) { return i.value; }).join('');
+}
+
+function shakePinRow(groupId) {
+  var inputs = document.querySelectorAll('[data-group="' + groupId + '"]');
+  inputs.forEach(function(i) {
+    i.classList.add('error');
+    i.value = '';
+    setTimeout(function() { i.classList.remove('error'); }, 400);
+  });
+  setTimeout(function() { inputs[0].focus(); }, 420);
+}
+
+function openVaultModal(account) {
+  vaultCurrentAccount = account;
+  vaultError.textContent = '';
+  var body = document.getElementById('vault-modal-body');
+  var sub = document.getElementById('vault-modal-sub');
+  sub.textContent = account.name;
+
+  if (account.vault && account.vault.enabled) {
+    // Cofre ativo: mostrar opcoes (desativar, trocar PIN, notificacoes)
+    document.getElementById('vault-modal-title').textContent = '🔒 Cofre ativo';
+    var notifChecked = account.vault.notificationsEnabled ? 'checked' : '';
+    body.innerHTML =
+      '<div class="vault-field"><label>Para desativar ou trocar o PIN, confirme o PIN atual:</label></div>' +
+      '<div class="vault-field"><div id="pin-current"></div></div>' +
+      '<div class="vault-toggle-row"><span>Notificacoes ocultas (so avisa, sem conteudo)</span>' +
+        '<label class="toggle"><input type="checkbox" id="vault-notif" ' + notifChecked + '><span class="slider"></span></label>' +
+      '</div>' +
+      '<div class="vault-btn-row">' +
+        '<button class="btn btn-secondary btn-sm" id="vault-change-pin-btn">Trocar PIN</button>' +
+        '<button class="btn btn-danger btn-sm" id="vault-deactivate-btn">Desativar Cofre</button>' +
+      '</div>';
+    body.querySelector('#pin-current').appendChild(makePinRow('pin-current-row', account.vault.pinLength || 4));
+    body.querySelector('#pin-current-row input').focus();
+
+    body.querySelector('#vault-notif').onchange = async function() {
+      await window.configAPI.setVaultNotifications(account.id, this.checked);
+    };
+
+    body.querySelector('#vault-change-pin-btn').onclick = function() {
+      showChangePinFlow(account);
+    };
+
+    body.querySelector('#vault-deactivate-btn').onclick = async function() {
+      var pin = getPinValue('pin-current-row');
+      var ok = await window.configAPI.checkPin(account.id, pin);
+      if (!ok) { vaultError.textContent = 'PIN incorreto'; shakePinRow('pin-current-row'); return; }
+      await window.configAPI.setVault(account.id, false);
+      closeVaultModal();
+      loadAccounts();
+    };
+
+    document.getElementById('vault-confirm').onclick = async function() {
+      // Salva notificacoes e fecha
+      closeVaultModal();
+      loadAccounts();
+    };
+
+  } else {
+    // Cofre inativo: ativar
+    document.getElementById('vault-modal-title').textContent = '🔒 Ativar Cofre';
+    body.innerHTML =
+      '<div class="vault-field"><label>Tamanho do PIN:</label>' +
+        '<select id="vault-pin-len" style="margin-left:8px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);border-radius:4px;padding:3px 6px">' +
+          '<option value="4">4 digitos</option>' +
+          '<option value="6">6 digitos</option>' +
+        '</select></div>' +
+      '<div class="vault-field"><label>Novo PIN:</label><div id="pin-new"></div></div>' +
+      '<div class="vault-field"><label>Confirmar PIN:</label><div id="pin-confirm"></div></div>' +
+      '<div class="vault-toggle-row"><span>Notificacoes ocultas (so avisa, sem conteudo)</span>' +
+        '<label class="toggle"><input type="checkbox" id="vault-notif-new"><span class="slider"></span></label>' +
+      '</div>';
+
+    var pinLen = 4;
+    body.querySelector('#pin-new').appendChild(makePinRow('pin-new-row', pinLen));
+    body.querySelector('#pin-confirm').appendChild(makePinRow('pin-confirm-row', pinLen));
+    body.querySelector('#pin-new-row input').focus();
+
+    body.querySelector('#vault-pin-len').onchange = function() {
+      pinLen = parseInt(this.value);
+      body.querySelector('#pin-new').innerHTML = '';
+      body.querySelector('#pin-confirm').innerHTML = '';
+      body.querySelector('#pin-new').appendChild(makePinRow('pin-new-row', pinLen));
+      body.querySelector('#pin-confirm').appendChild(makePinRow('pin-confirm-row', pinLen));
+      body.querySelector('#pin-new-row input').focus();
+    };
+
+    document.getElementById('vault-confirm').onclick = async function() {
+      var pin1 = getPinValue('pin-new-row');
+      var pin2 = getPinValue('pin-confirm-row');
+      var len = parseInt(body.querySelector('#vault-pin-len').value);
+      if (pin1.length < len) { vaultError.textContent = 'Digite o PIN completo'; return; }
+      if (pin1 !== pin2) { vaultError.textContent = 'Os PINs nao coincidem'; shakePinRow('pin-confirm-row'); return; }
+      var notif = body.querySelector('#vault-notif-new').checked;
+      await window.configAPI.setVault(account.id, true, pin1, len, notif);
+      closeVaultModal();
+      loadAccounts();
+    };
+  }
+
+  vaultOverlay.classList.add('active');
+}
+
+async function showChangePinFlow(account) {
+  var body = document.getElementById('vault-modal-body');
+  vaultError.textContent = '';
+  var pinLen = account.vault.pinLength || 4;
+  body.innerHTML =
+    '<div class="vault-field"><label>Novo PIN:</label><div id="pin-new2"></div></div>' +
+    '<div class="vault-field"><label>Confirmar novo PIN:</label><div id="pin-confirm2"></div></div>';
+  body.querySelector('#pin-new2').appendChild(makePinRow('pin-new2-row', pinLen));
+  body.querySelector('#pin-confirm2').appendChild(makePinRow('pin-confirm2-row', pinLen));
+  body.querySelector('#pin-new2-row input').focus();
+
+  document.getElementById('vault-confirm').onclick = async function() {
+    var currentPin = getPinValue('pin-current-row') || '';
+    var ok = await window.configAPI.checkPin(account.id, currentPin);
+    if (!ok) { vaultError.textContent = 'PIN atual incorreto'; return; }
+    var pin1 = getPinValue('pin-new2-row');
+    var pin2 = getPinValue('pin-confirm2-row');
+    if (pin1.length < pinLen) { vaultError.textContent = 'Digite o novo PIN completo'; return; }
+    if (pin1 !== pin2) { vaultError.textContent = 'Os PINs nao coincidem'; shakePinRow('pin-confirm2-row'); return; }
+    await window.configAPI.setVault(account.id, true, pin1, pinLen, account.vault.notificationsEnabled);
+    closeVaultModal();
+    loadAccounts();
+  };
+}
 
 // --- Events ---
 document.getElementById('btn-add').onclick = addAccount;

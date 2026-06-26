@@ -32,4 +32,11 @@ contextBridge.exposeInMainWorld("configAPI", {
   // Exportar/importar configuracoes
   exportConfig: () => ipcRenderer.invoke("export-config"),
   importConfig: () => ipcRenderer.invoke("import-config"),
+
+  // Cofre (vault)
+  setVault: (id: string, enabled: boolean, pin?: string, pinLength?: 4 | 6, notificationsEnabled?: boolean) =>
+    ipcRenderer.invoke("set-vault", id, enabled, pin, pinLength, notificationsEnabled),
+  checkPin: (id: string, pin: string) => ipcRenderer.invoke("check-pin", id, pin),
+  setVaultNotifications: (id: string, enabled: boolean) =>
+    ipcRenderer.invoke("set-vault-notifications", id, enabled),
 });

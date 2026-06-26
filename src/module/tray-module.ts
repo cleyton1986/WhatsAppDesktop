@@ -1,6 +1,7 @@
 import { Menu, MenuItem, Tray } from "electron";
 import { findIcon } from "../util";
 import type AppController from "../app-controller";
+import { openPinWindow } from "../pin-window";
 
 const ICON = findIcon("whatsapp-desktop-cleyton.png");
 const ICON_UNREAD = findIcon("whatsapp-desktop-cleyton-unread.png");
@@ -50,9 +51,17 @@ export default class TrayModule {
       }
 
       const emoji = aw.account.emoji ? `${aw.account.emoji} ` : "";
+      const isVault = aw.account.vault?.enabled;
+      const lockIcon = isVault ? "🔒 " : "";
       menuItems.push({
-        label: `${emoji}${aw.account.name}${status}`,
-        click: () => aw.show(),
+        label: `${lockIcon}${emoji}${aw.account.name}${status}`,
+        click: () => {
+          if (isVault) {
+            openPinWindow(aw);
+          } else {
+            aw.show();
+          }
+        },
       });
     }
 
@@ -86,15 +95,7 @@ export default class TrayModule {
 
   private registerTrayClick() {
     this.tray.on("click", () => {
-      const windows = this.controller.getAccountWindows();
-      if (windows.length === 0) return;
-
-      const anyVisible = windows.some((aw) => aw.window.isVisible());
-      if (anyVisible) {
-        windows.forEach((aw) => aw.hide());
-      } else {
-        windows.forEach((aw) => aw.show());
-      }
+      this.tray.popUpContextMenu();
     });
   }
 

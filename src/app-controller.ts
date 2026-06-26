@@ -5,6 +5,7 @@ import Settings from "./settings";
 import TrayModule from "./module/tray-module";
 import { initMiniPlayer } from "./mini-player";
 import { initNotificationWindow } from "./notification-window";
+import { registerPinHandlers } from "./pin-window";
 
 /**
  * Controlador principal da aplicacao.
@@ -41,6 +42,7 @@ export default class AppController {
     this.registerGlobalShortcuts();
     initMiniPlayer(() => this.getAccountWindows());
     initNotificationWindow(() => this.getAccountWindows());
+    registerPinHandlers((id, pin) => this.accountManager.checkPin(id, pin));
   }
 
   /**
@@ -367,6 +369,22 @@ Hidden=false
         return true;
       }
       return false;
+    });
+
+    // Cofre (vault) por conta
+    ipcMain.handle("set-vault", (_event, id: string, enabled: boolean, pin?: string, pinLength?: 4 | 6, notificationsEnabled?: boolean) => {
+      this.accountManager.setVault(id, enabled, pin, pinLength ?? 4, notificationsEnabled ?? false);
+      this.trayModule.updateFromAccounts();
+      return this.accountManager.getAccounts();
+    });
+
+    ipcMain.handle("check-pin", (_event, id: string, pin: string) => {
+      return this.accountManager.checkPin(id, pin);
+    });
+
+    ipcMain.handle("set-vault-notifications", (_event, id: string, enabled: boolean) => {
+      this.accountManager.setVaultNotifications(id, enabled);
+      return this.accountManager.getAccounts();
     });
 
     ipcMain.handle("import-config", async () => {

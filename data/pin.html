@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Conta Privada</title>
+  <style>
+    :root {
+      --bg: #111b21; --bg2: #202c33; --bg3: #2a3942;
+      --text: #e9edef; --text2: #8696a0;
+      --accent: #00a884; --danger: #ea0038; --border: #2a3942;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f0f2f5; --bg2: #ffffff; --bg3: #f5f6f6;
+        --text: #111b21; --text2: #667781;
+        --accent: #008069; --danger: #ea0038; --border: #e9edef;
+      }
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; user-select: none; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      padding: 24px;
+      -webkit-app-region: drag;
+    }
+    .lock-icon { font-size: 36px; margin-bottom: 8px; }
+    .title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: var(--text2); margin-bottom: 24px; }
+    .pin-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      -webkit-app-region: no-drag;
+    }
+    .pin-input {
+      width: 48px; height: 56px;
+      text-align: center;
+      font-size: 24px;
+      font-weight: 600;
+      background: var(--bg2);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      outline: none;
+      caret-color: transparent;
+      transition: border-color 0.15s;
+    }
+    .pin-input:focus { border-color: var(--accent); }
+    .pin-input.error { border-color: var(--danger); animation: shake 0.35s; }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20% { transform: translateX(-6px); }
+      40% { transform: translateX(6px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+    .error-msg {
+      font-size: 12px;
+      color: var(--danger);
+      margin-bottom: 16px;
+      min-height: 16px;
+      text-align: center;
+    }
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      -webkit-app-region: no-drag;
+    }
+    .btn {
+      padding: 9px 22px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-cancel { background: var(--bg3); color: var(--text2); }
+  </style>
+</head>
+<body>
+  <div class="lock-icon">🔒</div>
+  <div class="title">Conta Privada</div>
+  <div class="subtitle" id="accountName">—</div>
+
+  <div class="pin-row" id="pinRow"></div>
+  <div class="error-msg" id="errorMsg"></div>
+
+  <div class="btn-row">
+    <button class="btn btn-cancel" id="btnCancel">Cancelar</button>
+    <button class="btn btn-primary" id="btnConfirm">Confirmar</button>
+  </div>
+
+  <script>
+    const pinLength = parseInt(document.currentScript?.dataset?.pinLength || '4', 10);
+
+    // Recebe dados via IPC antes de renderizar
+    window.pinAPI.getData().then(({ accountName, pinLength: len }) => {
+      document.getElementById('accountName').textContent = accountName;
+      buildInputs(len || 4);
+    });
+
+    function buildInputs(len) {
+      const row = document.getElementById('pinRow');
+      row.innerHTML = '';
+      for (let i = 0; i < len; i++) {
+        const inp = document.createElement('input');
+        inp.type = 'password';
+        inp.inputMode = 'numeric';
+        inp.maxLength = 1;
+        inp.className = 'pin-input';
+        inp.dataset.index = i;
+        inp.addEventListener('keydown', onKeyDown);
+        inp.addEventListener('input', onInput);
+        row.appendChild(inp);
+      }
+      row.children[0].focus();
+    }
+
+    function inputs() {
+      return Array.from(document.querySelectorAll('.pin-input'));
+    }
+
+    function getPin() {
+      return inputs().map(i => i.value).join('');
+    }
+
+    function clearInputs() {
+      inputs().forEach(i => i.value = '');
+      inputs()[0].focus();
+    }
+
+    function showError(msg) {
+      document.getElementById('errorMsg').textContent = msg;
+      inputs().forEach(i => {
+        i.classList.add('error');
+        setTimeout(() => i.classList.remove('error'), 400);
+      });
+      setTimeout(clearInputs, 400);
+    }
+
+    function onInput(e) {
+      const inp = e.target;
+      const val = inp.value.replace(/\D/g, '');
+      inp.value = val ? val[val.length - 1] : '';
+      document.getElementById('errorMsg').textContent = '';
+      const idx = parseInt(inp.dataset.index);
+      if (inp.value && idx < inputs().length - 1) {
+        inputs()[idx + 1].focus();
+      }
+    }
+
+    function onKeyDown(e) {
+      const idx = parseInt(e.target.dataset.index);
+      if (e.key === 'Backspace' && !e.target.value && idx > 0) {
+        inputs()[idx - 1].focus();
+      }
+      if (e.key === 'Enter') confirm();
+    }
+
+    async function confirm() {
+      const pin = getPin();
+      if (pin.length < inputs().length) {
+        showError('Digite o PIN completo');
+        return;
+      }
+      const ok = await window.pinAPI.submit(pin);
+      if (!ok) {
+        showError('PIN incorreto');
+      }
+    }
+
+    document.getElementById('btnConfirm').addEventListener('click', confirm);
+    document.getElementById('btnCancel').addEventListener('click', () => window.pinAPI.cancel());
+
+    // Foca automaticamente ao carregar
+    window.addEventListener('focus', () => {
+      const first = inputs().find(i => !i.value);
+      (first || inputs()[0]).focus();
+    });
+  </script>
+</body>
+</html>

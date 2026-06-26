@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain, screen } from "electron";
 import path from "path";
 import type AccountWindow from "./account-window";
+import { openPinWindow } from "./pin-window";
 
 let notifWindow: BrowserWindow | null = null;
 let hideTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -100,9 +101,14 @@ export function initNotificationWindow(
     const aws = getAccountWindows();
     const aw = aws.find((a) => a.account.id === accountId);
     if (aw) {
-      aw.show();
-      if (contactName) {
-        navigateToConversation(aw, contactName);
+      if (aw.account.vault?.enabled) {
+        // Conta vault: pede PIN antes de abrir
+        openPinWindow(aw);
+      } else {
+        aw.show();
+        if (contactName) {
+          navigateToConversation(aw, contactName);
+        }
       }
     }
     closeNotifWindow();

@@ -36,7 +36,7 @@ export default class AccountWindow {
       height: 700,
       minWidth: 650,
       minHeight: 550,
-      show: !process.argv.includes("--start-hidden"),
+      show: !process.argv.includes("--start-hidden") && !account.vault?.enabled,
       webPreferences: {
         preload: path.join(__dirname, "preload.js"),
         contextIsolation: true,
@@ -78,9 +78,19 @@ export default class AccountWindow {
       if (message.startsWith("__WA_NOTIF__")) {
         console.log(`[${this.account.name}] NOTIFICACAO CAPTURADA:`, message);
         try {
+          const vault = this.account.vault;
+          // Conta vault com notificacoes desabilitadas: ignora
+          if (vault?.enabled && !vault.notificationsEnabled) return;
+
           const data = JSON.parse(message.substring("__WA_NOTIF__".length));
           const { pushNotification } = require("./notification-window");
-          pushNotification(this.account.id, data.title, data.body, this.account.emoji || "");
+
+          // Conta vault com notificacoes habilitadas: oculta remetente e conteudo
+          if (vault?.enabled && vault.notificationsEnabled) {
+            pushNotification(this.account.id, "Nova mensagem", "🔒 Conta privada", "🔒");
+          } else {
+            pushNotification(this.account.id, data.title, data.body, this.account.emoji || "");
+          }
         } catch (e) {
           console.error(`[${this.account.name}] Erro ao processar notificacao:`, e);
         }
