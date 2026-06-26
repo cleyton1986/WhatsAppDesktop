@@ -79,26 +79,30 @@ It wraps the official WhatsApp Web in an Electron window, adding Linux desktop i
 | `Ctrl++` / `Ctrl+-` | Zoom in / out |
 | `Ctrl+0` | Reset zoom |
 
-## Install (prebuilt AppImage)
+## Install
 
-Download the latest AppImage from the [Releases](../../releases) page:
+### One-liner (recommended)
+
+```bash
+curl -fsSL https://github.com/cleyton1986/WhatsAppDesktop/releases/latest/download/install-online.sh | bash
+```
+
+Automatically detects your distro and installs the `.deb` (Debian/Ubuntu/Mint) or AppImage (other distros).
+
+### Manual — Debian / Ubuntu / Mint (.deb)
+
+```bash
+sudo dpkg -i whatsapp-desktop-cleyton_2.0.0_amd64.deb
+```
+
+### Manual — Other distros (AppImage)
 
 ```bash
 chmod +x whatsapp-desktop-cleyton-2.0.0.AppImage
 ./whatsapp-desktop-cleyton-2.0.0.AppImage
 ```
 
-### Install via script (system-wide)
-
-```bash
-yarn install
-yarn build
-
-cd installer
-./install.sh
-```
-
-This installs the AppImage to `/opt/`, creates a symlink in `/usr/local/bin/`, and registers the `.desktop` entry so the app appears in your application menu.
+Download the latest release from the [Releases](../../releases) page.
 
 ## Build from source
 
