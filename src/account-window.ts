@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, session } from "electron";
+import { app, BrowserWindow, session } from "electron";
 import fs from "fs";
 import path from "path";
 import { Account } from "./account";
@@ -98,46 +98,64 @@ export default class AccountWindow {
       callback(true);
     });
 
-    // Intercepta downloads para mostrar dialog na frente da janela
-    ses.on("will-download", (event, item) => {
-      event.preventDefault();
-      const filename = item.getFilename();
-      const downloadsPath = app.getPath("downloads");
-      const defaultPath = path.join(downloadsPath, filename);
+    // Settings global compartilhado entre contas para ultimo diretorio usado
+    const downloadSettings = new Settings("downloads");
 
-      dialog
-        .showSaveDialog(this.window, {
-          title: "Salvar como",
-          defaultPath,
-          buttonLabel: "Salvar",
-        })
-        .then((result) => {
-          if (result.canceled || !result.filePath) {
-            item.cancel();
-            return;
+    // Sugere nome com data/hora atual e abre no ultimo diretorio usado
+    ses.on("will-download", (_event, item) => {
+      const filename = item.getFilename();
+      const ext = path.extname(filename);
+
+      // Recupera ultimo diretorio usado, ou Downloads como padrao
+      const lastDir = downloadSettings.get("lastDir", app.getPath("downloads")) as string;
+      const targetDir = fs.existsSync(lastDir) ? lastDir : app.getPath("downloads");
+
+      // Gera timestamp atual no formato YYYY-MM-DD at HH.MM.SS
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const dateStr =
+        `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
+        ` at ${pad(now.getHours())}.${pad(now.getMinutes())}.${pad(now.getSeconds())}`;
+
+      // Detecta o tipo pelo nome original ou pela extensao
+      let prefix = "WhatsApp File";
+      if (/^WhatsApp\s+(Image|Video|Audio|Document|Ptt)/i.test(filename)) {
+        const match = filename.match(/^(WhatsApp\s+\w+)/i);
+        if (match) prefix = match[1];
+      } else if (/\.(jpe?g|png|gif|webp|heic)$/i.test(ext)) {
+        prefix = "WhatsApp Image";
+      } else if (/\.(mp4|mov|webm|mkv|avi)$/i.test(ext)) {
+        prefix = "WhatsApp Video";
+      } else if (/\.(mp3|ogg|m4a|wav|opus)$/i.test(ext)) {
+        prefix = "WhatsApp Audio";
+      } else if (/\.(pdf|docx?|xlsx?|pptx?|txt|zip)$/i.test(ext)) {
+        prefix = "WhatsApp Document";
+      }
+
+      let finalName = `${prefix} ${dateStr}${ext}`;
+
+      // Se mesmo assim ja existir, adiciona contador
+      let counter = 1;
+      while (fs.existsSync(path.join(targetDir, finalName))) {
+        finalName = `${prefix} ${dateStr} (${counter})${ext}`;
+        counter++;
+      }
+
+      item.setSaveDialogOptions({
+        defaultPath: path.join(targetDir, finalName),
+      });
+
+      // Memoriza o diretorio escolhido apos o download concluir
+      item.once("done", (_e, state) => {
+        if (state === "completed") {
+          const savedPath = item.getSavePath();
+          if (savedPath) {
+            downloadSettings.set("lastDir", path.dirname(savedPath));
           }
-          // Continua o download para o caminho escolhido
-          const savePath = result.filePath;
-          const url = item.getURL();
-          ses.downloadURL(url);
-          ses.once("will-download", (_e, newItem) => {
-            newItem.setSavePath(savePath);
-            newItem.on("done", (_event, state) => {
-              if (state === "completed") {
-                console.log(`[${this.account.name}] Download concluido: ${savePath}`);
-              } else {
-                console.log(`[${this.account.name}] Download falhou: ${state}`);
-                try {
-                  if (fs.existsSync(savePath)) fs.unlinkSync(savePath);
-                } catch {}
-              }
-            });
-          });
-        })
-        .catch(() => {
-          item.cancel();
-        });
+        }
+      });
     });
+
 
     this.moduleManager.onLoad();
   }
