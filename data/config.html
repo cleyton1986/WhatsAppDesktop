@@ -103,6 +103,20 @@
     .privacy-row{display:flex;align-items:center;gap:14px;margin-top:5px}
     .privacy-item{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-secondary);cursor:pointer}
     .privacy-item input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px;cursor:pointer}
+
+    /* Edit account modal */
+    .edit-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:300;align-items:center;justify-content:center}
+    .edit-overlay.active{display:flex}
+    .edit-modal{background:var(--bg-secondary);border-radius:14px;padding:28px 24px;width:380px;box-shadow:0 8px 32px rgba(0,0,0,0.4);display:flex;flex-direction:column;gap:18px}
+    .edit-modal-title{font-size:17px;font-weight:600}
+    .edit-modal-subtitle{font-size:12px;color:var(--text-secondary);margin-top:-12px}
+    .edit-section{display:flex;flex-direction:column;gap:8px}
+    .edit-section-label{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.8px}
+    .edit-name-row{display:flex;gap:10px;align-items:center}
+    .edit-emoji-btn{font-size:26px;width:46px;height:46px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:10px;background:var(--bg-hover);border:none;transition:background 0.15s;flex-shrink:0}
+    .edit-emoji-btn:hover{background:var(--border)}
+    .edit-modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
+    .edit-divider{height:1px;background:var(--border);margin:0 -4px}
   </style>
 </head>
 <body>
@@ -150,6 +164,59 @@
 
   <div class="version">WhatsApp Desktop v2.0.0</div>
 
+  <!-- Edit Account Modal -->
+  <div class="edit-overlay" id="edit-overlay">
+    <div class="edit-modal">
+      <div class="edit-modal-title">Editar conta</div>
+      <div class="edit-modal-subtitle" id="edit-modal-subtitle"></div>
+
+      <div class="edit-section">
+        <div class="edit-section-label">Nome e Emoji</div>
+        <div class="edit-name-row">
+          <button class="edit-emoji-btn" id="edit-modal-emoji-btn">💬</button>
+          <input type="text" class="text-input" id="edit-modal-name" maxlength="30" placeholder="Nome da conta" />
+        </div>
+      </div>
+
+      <div class="edit-divider"></div>
+
+      <div class="edit-section">
+        <div class="edit-section-label">Tema</div>
+        <select id="edit-modal-theme" style="width:100%">
+          <option value="system">Sistema (seguir o WhatsApp Web)</option>
+          <option value="dark">Escuro</option>
+          <option value="light">Claro</option>
+        </select>
+      </div>
+
+      <div class="edit-divider"></div>
+
+      <div class="edit-section">
+        <div class="edit-section-label">Privacidade de tela</div>
+        <label class="privacy-item" style="font-size:13px">
+          <input type="checkbox" id="edit-modal-blur-sidebar" style="accent-color:var(--accent);width:15px;height:15px">
+          🙈 Turvar lista de conversas
+        </label>
+        <label class="privacy-item" style="font-size:13px">
+          <input type="checkbox" id="edit-modal-blur-chat" style="accent-color:var(--accent);width:15px;height:15px">
+          💬 Turvar tela de conversa
+        </label>
+      </div>
+
+      <div class="edit-divider"></div>
+
+      <div class="edit-section">
+        <div class="edit-section-label">Cofre</div>
+        <div id="edit-modal-vault-area"></div>
+      </div>
+
+      <div class="edit-modal-actions">
+        <button class="btn btn-secondary btn-sm" id="edit-modal-cancel">Cancelar</button>
+        <button class="btn btn-primary btn-sm" id="edit-modal-save">Salvar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Vault Modal -->
   <div class="vault-overlay" id="vault-overlay">
     <div class="vault-modal">
@@ -195,7 +262,6 @@ var EMOJIS = [
 ];
 
 var accountList = document.getElementById('account-list');
-var editingId = null;
 var emojiCallback = null;
 
 // --- Emoji Picker ---
@@ -269,64 +335,27 @@ function renderAccounts(accounts) {
     var item = document.createElement('div');
     item.className = 'account-item';
     var emoji = account.emoji || '💬';
-    var theme = account.theme || 'system';
+    var badges = '';
+    if (account.vault && account.vault.enabled) badges += '<span class="vault-badge">🔒 Cofre</span> ';
+    if (account.privacy && account.privacy.blurSidebar) badges += '<span class="vault-badge">🙈 Lista</span> ';
+    if (account.privacy && account.privacy.blurChat) badges += '<span class="vault-badge">💬 Chat</span> ';
 
-    if (editingId === account.id) {
-      item.innerHTML =
-        '<span class="account-emoji" id="edit-emoji-display-' + account.id + '">' + (account.emoji || '💬') + '</span>' +
-        '<div class="account-info"><input class="edit-input" value="' + esc(account.name) + '" id="edit-name-' + account.id + '" /></div>' +
-        '<div class="account-actions">' +
-          '<button class="btn btn-primary btn-sm" id="save-btn-' + account.id + '">Salvar</button>' +
-          '<button class="btn btn-secondary btn-sm" id="cancel-btn-' + account.id + '">Cancelar</button>' +
-        '</div>';
-
-      item.querySelector('#edit-emoji-display-' + account.id).onclick = function() {
-        openEmojiPicker(function(e) {
-          document.getElementById('edit-emoji-display-' + account.id).textContent = e || '💬';
-          document.getElementById('edit-emoji-display-' + account.id).setAttribute('data-emoji', e);
-        });
-      };
-      item.querySelector('#save-btn-' + account.id).onclick = function() { saveEdit(account.id); };
-      item.querySelector('#cancel-btn-' + account.id).onclick = function() { cancelEdit(); };
-    } else {
-      item.innerHTML =
-        '<span class="account-emoji" id="emoji-' + account.id + '">' + emoji + '</span>' +
-        '<div class="account-info">' +
-          '<div class="account-name-row">' +
-            '<span class="account-name">' + esc(account.name) + '</span>' +
-            '<span class="account-shortcut">Ctrl+' + (index + 1) + '</span>' +
-          '</div>' +
-          '<div class="account-theme-row">' +
-            '<span class="account-theme-label">Tema:</span>' +
-            '<select id="theme-' + account.id + '">' +
-              '<option value="system"' + (theme === 'system' ? ' selected' : '') + '>Sistema</option>' +
-              '<option value="dark"' + (theme === 'dark' ? ' selected' : '') + '>Escuro</option>' +
-              '<option value="light"' + (theme === 'light' ? ' selected' : '') + '>Claro</option>' +
-            '</select>' +
-            (account.vault && account.vault.enabled ? '<span class="vault-badge">🔒 Cofre ativado</span>' : '') +
-          '</div>' +
-          '<div class="privacy-row">' +
-            '<label class="privacy-item"><input type="checkbox" id="priv-sidebar-' + account.id + '"' + (account.privacy && account.privacy.blurSidebar ? ' checked' : '') + '> 🙈 Turvar lista</label>' +
-            '<label class="privacy-item"><input type="checkbox" id="priv-chat-' + account.id + '"' + (account.privacy && account.privacy.blurChat ? ' checked' : '') + '> 💬 Turvar conversa</label>' +
-          '</div>' +
+    item.innerHTML =
+      '<span class="account-emoji">' + emoji + '</span>' +
+      '<div class="account-info">' +
+        '<div class="account-name-row">' +
+          '<span class="account-name">' + esc(account.name) + '</span>' +
+          '<span class="account-shortcut">Ctrl+' + (index + 1) + '</span>' +
         '</div>' +
-        '<div class="account-actions">' +
-          '<button class="btn btn-secondary btn-sm" id="vault-btn-' + account.id + '">' + (account.vault && account.vault.enabled ? '🔒' : '🔓') + ' Cofre</button>' +
-          '<button class="btn btn-secondary btn-sm" id="edit-btn-' + account.id + '">Editar</button>' +
-          '<button class="btn btn-danger btn-sm" id="del-btn-' + account.id + '">Remover</button>' +
-        '</div>';
+        (badges ? '<div style="margin-top:3px">' + badges + '</div>' : '') +
+      '</div>' +
+      '<div class="account-actions">' +
+        '<button class="btn btn-secondary btn-sm" id="edit-btn-' + account.id + '">Editar</button>' +
+        '<button class="btn btn-danger btn-sm" id="del-btn-' + account.id + '">Remover</button>' +
+      '</div>';
 
-      // Bind events after innerHTML
-      item.querySelector('#emoji-' + account.id).onclick = function() {
-        openEmojiPicker(function(e) { setEmoji(account.id, e); });
-      };
-      item.querySelector('#theme-' + account.id).onchange = function() { setTheme(account.id, this.value); };
-      item.querySelector('#vault-btn-' + account.id).onclick = function() { openVaultModal(account); };
-      item.querySelector('#edit-btn-' + account.id).onclick = function() { startEdit(account.id); };
-      item.querySelector('#del-btn-' + account.id).onclick = function() { removeAccount(account.id, account.name); };
-      item.querySelector('#priv-sidebar-' + account.id).onchange = function() { setPrivacy(account.id, item); };
-      item.querySelector('#priv-chat-' + account.id).onchange = function() { setPrivacy(account.id, item); };
-    }
+    item.querySelector('#edit-btn-' + account.id).onclick = function() { openEditModal(account); };
+    item.querySelector('#del-btn-' + account.id).onclick = function() { removeAccount(account.id, account.name); };
     accountList.appendChild(item);
   });
 }
@@ -349,34 +378,84 @@ async function removeAccount(id, name) {
   }
 }
 
-async function setEmoji(id, emoji) {
-  var accounts = await window.configAPI.setEmoji(id, emoji);
-  renderAccounts(accounts);
+// --- Edit Account Modal ---
+var editOverlay = document.getElementById('edit-overlay');
+var editCurrentAccount = null;
+var editCurrentEmoji = '';
+
+document.getElementById('edit-modal-cancel').onclick = function() { closeEditModal(); };
+editOverlay.onclick = function(e) { if (e.target === editOverlay) closeEditModal(); };
+document.getElementById('edit-modal-save').onclick = saveEditModal;
+
+document.getElementById('edit-modal-emoji-btn').onclick = function() {
+  openEmojiPicker(function(e) {
+    editCurrentEmoji = e;
+    document.getElementById('edit-modal-emoji-btn').textContent = e || '💬';
+  });
+};
+
+function closeEditModal() {
+  editOverlay.classList.remove('active');
+  editCurrentAccount = null;
 }
 
-async function setTheme(id, theme) {
-  await window.configAPI.setTheme(id, theme);
+function openEditModal(account) {
+  editCurrentAccount = account;
+  editCurrentEmoji = account.emoji || '';
+  document.getElementById('edit-modal-subtitle').textContent = account.name;
+  document.getElementById('edit-modal-emoji-btn').textContent = account.emoji || '💬';
+  document.getElementById('edit-modal-name').value = account.name;
+
+  var theme = account.theme || 'system';
+  document.getElementById('edit-modal-theme').value = theme;
+
+  document.getElementById('edit-modal-blur-sidebar').checked = !!(account.privacy && account.privacy.blurSidebar);
+  document.getElementById('edit-modal-blur-chat').checked = !!(account.privacy && account.privacy.blurChat);
+
+  // Vault area
+  var vaultArea = document.getElementById('edit-modal-vault-area');
+  if (account.vault && account.vault.enabled) {
+    vaultArea.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between">' +
+        '<span style="font-size:13px">🔒 Cofre ativado</span>' +
+        '<button class="btn btn-secondary btn-sm" id="edit-vault-manage-btn">Gerenciar</button>' +
+      '</div>';
+    vaultArea.querySelector('#edit-vault-manage-btn').onclick = function() {
+      closeEditModal();
+      openVaultModal(account);
+    };
+  } else {
+    vaultArea.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between">' +
+        '<span style="font-size:13px;color:var(--text-secondary)">Cofre desativado</span>' +
+        '<button class="btn btn-secondary btn-sm" id="edit-vault-activate-btn">Ativar</button>' +
+      '</div>';
+    vaultArea.querySelector('#edit-vault-activate-btn').onclick = function() {
+      closeEditModal();
+      openVaultModal(account);
+    };
+  }
+
+  editOverlay.classList.add('active');
+  setTimeout(function() { document.getElementById('edit-modal-name').focus(); }, 100);
 }
 
-async function setPrivacy(id, item) {
-  var blurSidebar = item.querySelector('#priv-sidebar-' + id).checked;
-  var blurChat = item.querySelector('#priv-chat-' + id).checked;
-  await window.configAPI.setPrivacy(id, blurSidebar, blurChat);
-}
+async function saveEditModal() {
+  if (!editCurrentAccount) return;
+  var id = editCurrentAccount.id;
+  var name = document.getElementById('edit-modal-name').value.trim();
+  if (!name) { document.getElementById('edit-modal-name').focus(); return; }
 
-function startEdit(id) { editingId = id; loadAccounts(); }
-function cancelEdit() { editingId = null; loadAccounts(); }
+  var theme = document.getElementById('edit-modal-theme').value;
+  var blurSidebar = document.getElementById('edit-modal-blur-sidebar').checked;
+  var blurChat = document.getElementById('edit-modal-blur-chat').checked;
 
-async function saveEdit(id) {
-  var nameInput = document.getElementById('edit-name-' + id);
-  var emojiDisplay = document.getElementById('edit-emoji-display-' + id);
-  var name = nameInput.value.trim();
-  var emoji = emojiDisplay.getAttribute('data-emoji') || emojiDisplay.textContent;
-  if (emoji === '💬') emoji = '';
-  if (!name) return;
-  editingId = null;
   await window.configAPI.renameAccount(id, name);
-  await window.configAPI.setEmoji(id, emoji);
+  await window.configAPI.setEmoji(id, editCurrentEmoji);
+  await window.configAPI.setTheme(id, theme);
+  await window.configAPI.setPrivacy(id, blurSidebar, blurChat);
+
+  closeEditModal();
   await loadAccounts();
 }
 
